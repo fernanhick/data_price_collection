@@ -5,6 +5,7 @@ import config from './config/index.js';
 import logger from './utils/logger.js';
 import { healthCheck, closePool } from './db/index.js';
 import { verifyConvexJWT } from './middleware/verifyJWT.js';
+import scheduler from './services/scheduler.js';
 
 // Import routes (will create these next)
 // import priceRoutes from './routes/prices.js';
@@ -38,10 +39,13 @@ app.use((req, res, next) => {
 app.get('/health', async (req, res) => {
   try {
     const dbHealthy = await healthCheck();
+    const schedulerStatus = scheduler.getStatus();
+
     res.json({
       status: dbHealthy ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
       environment: config.nodeEnv,
+      scheduler: schedulerStatus,
     });
   } catch (error) {
     res.status(503).json({
@@ -82,10 +86,14 @@ async function start() {
     }
     logger.info('✅ Database connection established');
 
+    // Start scheduler
+    scheduler.startAll();
+
     // Start server
     app.listen(PORT, () => {
       logger.info(`🚀 Server running on http://localhost:${PORT}`);
       logger.info(`Environment: ${config.nodeEnv}`);
+      logger.info(`API Base: ${config.apiBaseUrl}`);
     });
   } catch (error) {
     logger.error({ error }, 'Failed to start server');
@@ -96,12 +104,14 @@ async function start() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  scheduler.stopAll();
   await closePool();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  scheduler.stopAll();
   await closePool();
   process.exit(0);
 });
