@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sneaker-api-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sneaker_prices
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: sneaker-api-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Node.js Application (optional, for development with docker-compose)
+  # Uncomment to run app in container
+  # app:
+  #   build: .
+  #   container_name: sneaker-api-app
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     NODE_ENV: development
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sneaker_prices
+  #     REDIS_URL: redis://redis:6379
+  #     PORT: 3000
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./src:/app/src
+  #     - ./dist:/app/dist
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
