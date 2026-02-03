@@ -7,9 +7,9 @@ import { healthCheck, closePool } from './db/index.js';
 import { verifyConvexJWT } from './middleware/verifyJWT.js';
 import scheduler from './services/scheduler.js';
 
-// Import routes (will create these next)
-// import priceRoutes from './routes/prices.js';
-// import skuRoutes from './routes/skus.js';
+// Import routes
+import priceRoutes from './routes/prices.js';
+import skuRoutes from './routes/skus.js';
 
 const app = express();
 
@@ -57,8 +57,8 @@ app.get('/health', async (req, res) => {
 });
 
 // Protected routes (require JWT)
-// app.use('/api/prices', verifyConvexJWT, priceRoutes);
-// app.use('/api/skus', verifyConvexJWT, skuRoutes);
+app.use('/api/prices', verifyConvexJWT, priceRoutes);
+app.use('/api/skus', verifyConvexJWT, skuRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
