@@ -201,4 +201,7 @@ export interface AppConfig {
   logging: {
     level: 'debug' | 'info' | 'warn' | 'error';
   };
+  admin: {
+    userIds: string[];
+  };
 }

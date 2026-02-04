@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sneaker Catalog Admin</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <h1>Admin Login</h1>
+            <p>Enter your Convex JWT token to access the admin dashboard</p>
+            <form id="loginForm">
+                <textarea
+                    id="tokenInput"
+                    placeholder="Paste your JWT token here..."
+                    rows="4"
+                    required
+                ></textarea>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="dashboard" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <h1>Sneaker Catalog Admin</h1>
+            <button id="logoutBtn" class="btn-secondary">Logout</button>
+        </header>
+
+        <!-- Controls Bar -->
+        <div class="controls">
+            <div class="search-filters">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Search sneakers..."
+                    class="search-input"
+                >
+                <select id="brandFilter" class="filter-select">
+                    <option value="">All Brands</option>
+                    <option value="Nike">Nike</option>
+                    <option value="Adidas">Adidas</option>
+                    <option value="New Balance">New Balance</option>
+                    <option value="Reebok">Reebok</option>
+                    <option value="Puma">Puma</option>
+                </select>
+                <select id="tierFilter" class="filter-select">
+                    <option value="">All Tiers</option>
+                    <option value="1">Tier 1 (High-demand)</option>
+                    <option value="2">Tier 2 (Medium)</option>
+                    <option value="3">Tier 3 (Long-tail)</option>
+                </select>
+            </div>
+            <button id="createBtn" class="btn-primary">+ Create New</button>
+        </div>
+
+        <!-- SKU Table -->
+        <div class="table-container">
+            <table id="skuTable" class="sku-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Style Code</th>
+                        <th>Brand</th>
+                        <th>Model</th>
+                        <th>Colorway</th>
+                        <th>Tier</th>
+                        <th>Retail Price</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="skuTableBody">
+                    <tr>
+                        <td colspan="8" class="loading">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" id="pagination">
+            <button id="prevBtn" class="btn-secondary" disabled>Previous</button>
+            <span id="pageInfo">Page 1</span>
+            <button id="nextBtn" class="btn-secondary">Next</button>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Create Sneaker</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <form id="skuForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="skuCode">SKU Code / Style Code *</label>
+                        <input type="text" id="skuCode" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="brandStyleCode">Brand Style Code *</label>
+                        <input type="text" id="brandStyleCode" required maxlength="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="brand">Brand *</label>
+                        <input type="text" id="brand" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="model">Model *</label>
+                        <input type="text" id="model" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="colorway">Colorway</label>
+                        <input type="text" id="colorway" maxlength="255">
+                    </div>
+                    <div class="form-group">
+                        <label for="releaseDate">Release Date</label>
+                        <input type="date" id="releaseDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="retailPrice">Retail Price ($)</label>
+                        <input type="number" id="retailPrice" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Category</label>
+                        <input type="text" id="category" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="tier">Tier *</label>
+                        <select id="tier" required>
+                            <option value="1">Tier 1 (High-demand)</option>
+                            <option value="2" selected>Tier 2 (Medium)</option>
+                            <option value="3">Tier 3 (Long-tail)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="stockxId">StockX ID</label>
+                        <input type="text" id="stockxId" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="goatId">GOAT ID</label>
+                        <input type="text" id="goatId" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="ebayQuery">eBay Query</label>
+                        <input type="text" id="ebayQuery" maxlength="255">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn-primary" id="submitBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="modal-close" id="deleteModalClose">&times;</button>
+            </div>
+            <p id="deleteMessage">Are you sure you want to delete this sneaker?</p>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

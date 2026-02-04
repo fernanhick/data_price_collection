@@ -49,6 +49,10 @@ const config: AppConfig = {
   logging: {
     level: (process.env.LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',
   },
+
+  admin: {
+    userIds: process.env.ADMIN_USER_IDS?.split(',').map((id) => id.trim()) || [],
+  },
 };
 
 // Validate required config

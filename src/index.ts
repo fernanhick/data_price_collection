@@ -1,15 +1,23 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from './config/index.js';
 import logger from './utils/logger.js';
 import { healthCheck, closePool } from './db/index.js';
 import { verifyConvexJWT } from './middleware/verifyJWT.js';
+import { verifyAdmin } from './middleware/verifyAdmin.js';
 import scheduler from './services/scheduler.js';
 
 // Import routes
 import priceRoutes from './routes/prices.js';
 import skuRoutes from './routes/skus.js';
+import adminRoutes from './routes/admin.js';
+
+// ES module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -61,9 +69,15 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+// Static files for admin dashboard
+app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
+
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);
 app.use('/api/skus', verifyConvexJWT, skuRoutes);
+
+// Admin routes (require JWT + admin authorization)
+app.use('/api/admin', verifyConvexJWT, verifyAdmin, adminRoutes);
 
 // Error handling middleware
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
