@@ -12,9 +12,9 @@
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src/**/*.ts",
-    "db:migrate": "ts-node --esm src/scripts/migrate.ts",
-    "db:seed": "ts-node --esm src/scripts/seed.ts",
-    "scraper:test": "ts-node --esm src/scripts/test-scraper.ts"
+    "db:migrate": "npm run build && node dist/scripts/migrate.js",
+    "db:seed": "npm run build && node dist/scripts/seed.js",
+    "scraper:test": "npm run build && node dist/scripts/test-scraper.js"
   },
   "keywords": [
     "sneaker",
