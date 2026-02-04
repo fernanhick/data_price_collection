@@ -67,38 +67,30 @@ export class EbayScraper {
     const $ = load(html);
     const listings: eBayListing[] = [];
 
-    // eBay uses div elements with specific classes for listings
-    const listingElements = $('div.s-item');
+    // eBay updated their HTML structure - now uses .s-card instead of .s-item
+    const listingElements = $('.s-card');
 
     listingElements.each((_index, element) => {
       try {
         const $item = $(element);
 
-        // Extract title
-        const title = $item.find('.s-item__title').text().trim();
+        // Extract title using new selector
+        const title = $item.find('.s-card__title').text().trim();
         if (!title) return; // Skip if no title
 
-        // Extract price - eBay shows price in multiple possible locations
-        let priceText = $item.find('.s-item__price').text().trim();
-
-        // Fallback: look for price in alternative locations
-        if (!priceText) {
-          priceText = $item.find('.BOLD').text().trim();
-        }
+        // Extract price using new selector
+        let priceText = $item.find('.s-card__price').first().text().trim();
 
         // Parse price (handle "Sold" items showing previous price)
         const price = this.parsePrice(priceText);
         if (!price) return; // Skip if price can't be parsed
 
-        // Extract URL
-        const url = $item.find('.s-item__link').attr('href') || '';
+        // Extract URL using new selector
+        const url = $item.find('.s-card__link').attr('href') || '';
         if (!url) return;
 
-        // Extract seller info (optional)
-        const sellerInfo = $item.find('.s-item__etrs').text().trim();
-
-        // Extract item condition
-        const condition = $item.find('.SECONDARY_INFO').text().trim();
+        // Extract subtitle/condition (optional)
+        const condition = $item.find('.s-card__subtitle').text().trim();
 
         listings.push({
           title,
@@ -107,7 +99,7 @@ export class EbayScraper {
           timestamp: new Date(),
         });
 
-        logger.debug({ title, price, url, condition, sellerInfo }, 'Extracted listing');
+        logger.debug({ title, price, url, condition }, 'Extracted listing');
       } catch (error) {
         logger.debug(
           { error: error instanceof Error ? error.message : String(error) },
