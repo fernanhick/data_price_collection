@@ -14,6 +14,7 @@ import scheduler from './services/scheduler.js';
 import priceRoutes from './routes/prices.js';
 import skuRoutes from './routes/skus.js';
 import adminRoutes from './routes/admin.js';
+import analyticsRoutes from './routes/analytics.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -75,6 +76,7 @@ app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);
 app.use('/api/skus', verifyConvexJWT, skuRoutes);
+app.use('/api', verifyConvexJWT, analyticsRoutes);
 
 // Admin routes (require JWT + admin authorization)
 app.use('/api/admin', verifyConvexJWT, verifyAdmin, adminRoutes);

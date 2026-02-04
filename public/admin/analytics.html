@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Sneaker Catalog</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .analytics-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-card .subvalue {
+            font-size: 14px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chart-card h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .table-card h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #333;
+        }
+
+        .btn-back {
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .btn-back:hover {
+            background: #5a6268;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="analytics-container">
+        <div class="header">
+            <h1>📊 Catalog Analytics</h1>
+            <a href="/admin" class="btn-back">← Back to Catalog</a>
+        </div>
+
+        <div id="loading" class="loading">Loading analytics...</div>
+
+        <div id="analyticsContent" style="display: none;">
+            <!-- Summary Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Sneakers</h3>
+                    <div class="value" id="totalSneakers">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Brands</h3>
+                    <div class="value" id="totalBrands">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Average Price</h3>
+                    <div class="value" id="avgPrice">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Price Range</h3>
+                    <div class="value" id="priceRange">-</div>
+                    <div class="subvalue" id="priceSubtext"></div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2>Sneakers by Brand</h2>
+                    <div class="chart-container">
+                        <canvas id="brandChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h2>Price Range Distribution</h2>
+                    <div class="chart-container">
+                        <canvas id="priceRangeChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h2>Sneakers by Tier</h2>
+                    <div class="chart-container">
+                        <canvas id="tierChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h2>Average Price by Tier</h2>
+                    <div class="chart-container">
+                        <canvas id="avgPriceTierChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Brand Breakdown Table -->
+            <div class="table-card">
+                <h2>Brand Breakdown</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Brand</th>
+                            <th>Count</th>
+                            <th>Avg Price</th>
+                            <th>Min Price</th>
+                            <th>Max Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="brandTable">
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Top Models Table -->
+            <div class="table-card">
+                <h2>Top 10 Models</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Brand</th>
+                            <th>Count</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topModelsTable">
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Recently Added -->
+            <div class="table-card">
+                <h2>Recently Added (Last 10)</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>SKU Code</th>
+                            <th>Brand</th>
+                            <th>Model</th>
+                            <th>Colorway</th>
+                            <th>Retail Price</th>
+                            <th>Tier</th>
+                            <th>Added</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentTable">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Fetch and display analytics
+        async function loadAnalytics() {
+            try {
+                const data = await apiRequest('GET', '/api/analytics');
+
+                if (!data) return;
+
+                // Update summary stats
+                document.getElementById('totalSneakers').textContent = data.summary.total;
+                document.getElementById('totalBrands').textContent = data.summary.brands;
+                document.getElementById('avgPrice').textContent = '$' + data.summary.avgPrice;
+                document.getElementById('priceRange').textContent = `$${data.summary.minPrice} - $${data.summary.maxPrice}`;
+
+                // Create Brand Chart
+                createBrandChart(data.brands);
+
+                // Create Price Range Chart
+                createPriceRangeChart(data.priceRanges);
+
+                // Create Tier Chart
+                createTierChart(data.tiers);
+
+                // Create Avg Price by Tier Chart
+                createAvgPriceTierChart(data.avgPriceByTier);
+
+                // Populate Brand Table
+                populateBrandTable(data.brands);
+
+                // Populate Top Models Table
+                populateTopModelsTable(data.topModels);
+
+                // Populate Recent Table
+                populateRecentTable(data.recentlyAdded);
+
+                // Show content
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('analyticsContent').style.display = 'block';
+
+            } catch (error) {
+                document.getElementById('loading').textContent = 'Error loading analytics: ' + error.message;
+            }
+        }
+
+        function createBrandChart(brands) {
+            const top10 = brands.slice(0, 10);
+            const ctx = document.getElementById('brandChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top10.map(b => b.brand),
+                    datasets: [{
+                        label: 'Sneakers',
+                        data: top10.map(b => b.count),
+                        backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function createPriceRangeChart(priceRanges) {
+            const ctx = document.getElementById('priceRangeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: priceRanges.map(p => p.range),
+                    datasets: [{
+                        data: priceRanges.map(p => p.count),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+
+        function createTierChart(tiers) {
+            const ctx = document.getElementById('tierChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: tiers.map(t => `Tier ${t.tier}`),
+                    datasets: [{
+                        data: tiers.map(t => t.count),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+
+        function createAvgPriceTierChart(avgPriceByTier) {
+            const ctx = document.getElementById('avgPriceTierChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: avgPriceByTier.map(t => `Tier ${t.tier}`),
+                    datasets: [{
+                        label: 'Average Price ($)',
+                        data: avgPriceByTier.map(t => parseFloat(t.avgPrice)),
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function populateBrandTable(brands) {
+            const tbody = document.getElementById('brandTable');
+            tbody.innerHTML = brands.map(brand => `
+                <tr>
+                    <td><strong>${brand.brand}</strong></td>
+                    <td>${brand.count}</td>
+                    <td>$${brand.avgPrice || 'N/A'}</td>
+                    <td>$${brand.minPrice || 'N/A'}</td>
+                    <td>$${brand.maxPrice || 'N/A'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function populateTopModelsTable(topModels) {
+            const tbody = document.getElementById('topModelsTable');
+            tbody.innerHTML = topModels.map(model => `
+                <tr>
+                    <td>${model.model}</td>
+                    <td>${model.brand}</td>
+                    <td><strong>${model.count}</strong></td>
+                </tr>
+            `).join('');
+        }
+
+        function populateRecentTable(recent) {
+            const tbody = document.getElementById('recentTable');
+            tbody.innerHTML = recent.map(item => `
+                <tr>
+                    <td><code>${item.sku_code}</code></td>
+                    <td>${item.brand}</td>
+                    <td>${item.model}</td>
+                    <td>${item.colorway || '-'}</td>
+                    <td>$${item.retail_price || 'N/A'}</td>
+                    <td>Tier ${item.tier}</td>
+                    <td>${new Date(item.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Load analytics on page load
+        if (isLoggedIn()) {
+            loadAnalytics();
+        } else {
+            window.location.href = '/admin';
+        }
+    </script>
+</body>
+</html>
