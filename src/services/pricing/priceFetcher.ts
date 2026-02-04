@@ -5,6 +5,10 @@ import { GoatScraper } from '../scrapers/goat.js';
 import { StockxScraper } from '../scrapers/stockx.js';
 import { PriceSource, SKU } from '../../types/index.js';
 
+// Recommended delays between requests (in milliseconds)
+const STOCKX_DELAY_MS = 10000; // 10 seconds between StockX requests to avoid Cloudflare blocks
+const DEFAULT_DELAY_MS = 2000; // 2 seconds between other requests
+
 /**
  * Fetch and store prices for sneakers
  */
@@ -12,6 +16,13 @@ export class PriceFetcher {
   private ebayScraper = new EbayScraper();
   private goatScraper = new GoatScraper();
   private stockxScraper = new StockxScraper();
+
+  /**
+   * Helper to add delay between requests
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   /**
    * Fetch eBay prices for a single sneaker
@@ -183,22 +194,47 @@ export class PriceFetcher {
 
   /**
    * Fetch prices from all sources for a single SKU
+   * Note: StockX is fetched separately with delay to avoid Cloudflare blocks
    */
   async fetchAllPricesForSku(sku: SKU): Promise<{
     ebay: { success: boolean; price?: number };
     goat: { success: boolean; price?: number };
     stockx: { success: boolean; price?: number };
   }> {
-    const [ebayResult, goatResult, stockxResult] = await Promise.all([
+    // Fetch eBay and GOAT in parallel (they don't have aggressive anti-bot measures)
+    const [ebayResult, goatResult] = await Promise.all([
       this.fetchEbayPricesForSku(sku),
       this.fetchGoatPricesForSku(sku),
-      this.fetchStockxPricesForSku(sku),
     ]);
+
+    // Add delay before StockX to avoid Cloudflare detection
+    await this.delay(STOCKX_DELAY_MS);
+
+    // Fetch StockX separately
+    const stockxResult = await this.fetchStockxPricesForSku(sku);
 
     return {
       ebay: ebayResult,
       goat: goatResult,
       stockx: stockxResult,
+    };
+  }
+
+  /**
+   * Fetch prices from eBay and GOAT only (faster, skips StockX)
+   */
+  async fetchFastPricesForSku(sku: SKU): Promise<{
+    ebay: { success: boolean; price?: number };
+    goat: { success: boolean; price?: number };
+  }> {
+    const [ebayResult, goatResult] = await Promise.all([
+      this.fetchEbayPricesForSku(sku),
+      this.fetchGoatPricesForSku(sku),
+    ]);
+
+    return {
+      ebay: ebayResult,
+      goat: goatResult,
     };
   }
 
