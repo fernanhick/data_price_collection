@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm view:*)",
+      "Bash(npm install)",
+      "Bash(npm audit:*)",
+      "Bash(npm outdated:*)",
+      "Bash(npm update:*)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 30 npm test:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run format:*)"
+    ]
+  }
+}
