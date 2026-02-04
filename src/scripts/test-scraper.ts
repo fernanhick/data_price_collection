@@ -1,11 +1,12 @@
 import { EbayScraper } from '../services/scrapers/ebay.js';
+import { GoatScraper } from '../services/scrapers/goat.js';
 import { PriceFetcher } from '../services/pricing/priceFetcher.js';
 import { query as dbQuery, closePool } from '../db/index.js';
 import logger from '../utils/logger.js';
 import { SKU } from '../types/index.js';
 
 /**
- * Test script to verify eBay scraper functionality
+ * Test script to verify scraper functionality
  * Run with: npm run scraper:test
  */
 async function testScraper() {
@@ -52,9 +53,46 @@ async function testScraper() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
-    // Test 2: Database integration
-    logger.info('\n=== Test 2: Database Integration ===');
-    const result = await dbQuery<SKU>('SELECT * FROM skus LIMIT 5');
+    // Test 2: Direct GOAT scraper
+    logger.info('\n=== Test 2: Direct GOAT Scraper ===');
+    const goatScraper = new GoatScraper();
+
+    for (const query of testQueries) {
+      logger.info(`Testing GOAT query: "${query}"`);
+      try {
+        const listings = await goatScraper.searchProducts(query, 3);
+        const stats = GoatScraper.getPriceStats(listings);
+
+        if (listings.length > 0) {
+          logger.info({
+            query,
+            listingsFound: listings.length,
+            stats,
+            sample: listings.slice(0, 2).map((l) => ({
+              name: l.name,
+              price: `$${(l.lowestPriceCents / 100).toFixed(2)}`,
+              url: l.url,
+            })),
+          });
+          logger.info(`✅ Found ${listings.length} listings for "${query}"`);
+          logger.info(`Avg price: $${stats?.avg?.toFixed(2)}`);
+        } else {
+          logger.warn(`⚠️  No listings found for "${query}"`);
+        }
+      } catch (error) {
+        logger.error(
+          { query, error: error instanceof Error ? error.message : String(error) },
+          'GOAT query failed',
+        );
+      }
+
+      // Add delay between requests
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    // Test 3: Database integration with all sources
+    logger.info('\n=== Test 3: Database Integration (All Sources) ===');
+    const result = await dbQuery<SKU>('SELECT * FROM skus LIMIT 3');
     const skus = result.rows;
 
     if (skus.length === 0) {
@@ -67,18 +105,19 @@ async function testScraper() {
       for (const sku of skus) {
         logger.info(`\nFetching prices for: ${sku.sku_code}`);
         try {
-          const fetchResult = await priceFetcher.fetchEbayPricesForSku(sku);
+          const fetchResult = await priceFetcher.fetchAllPricesForSku(sku);
 
-          if (fetchResult.success) {
-            logger.info({
-              skuCode: sku.sku_code,
-              price: fetchResult.price,
-              listingCount: fetchResult.listingCount,
-            });
-            logger.info(`✅ Successfully fetched prices for ${sku.sku_code}`);
-          } else {
-            logger.warn(`⚠️  No prices found for ${sku.sku_code}`);
-          }
+          logger.info({
+            skuCode: sku.sku_code,
+            ebay: fetchResult.ebay.success ? `$${fetchResult.ebay.price?.toFixed(2)}` : 'failed',
+            goat: fetchResult.goat.success ? `$${fetchResult.goat.price?.toFixed(2)}` : 'failed',
+            stockx: fetchResult.stockx.success ? `$${fetchResult.stockx.price?.toFixed(2)}` : 'disabled',
+          });
+
+          const successCount = [fetchResult.ebay, fetchResult.goat, fetchResult.stockx].filter(
+            (r) => r.success,
+          ).length;
+          logger.info(`✅ Successfully fetched from ${successCount}/3 sources for ${sku.sku_code}`);
         } catch (error) {
           logger.error({ skuCode: sku.sku_code, error }, 'Failed to fetch prices');
         }
@@ -95,6 +134,15 @@ async function testScraper() {
     const priceCount = await dbQuery('SELECT COUNT(*) as count FROM prices');
     const count = (priceCount.rows[0] as any).count;
     logger.info(`Total prices stored: ${count}`);
+
+    // Show breakdown by source
+    const sourceBreakdown = await dbQuery(
+      'SELECT source, COUNT(*) as count FROM prices GROUP BY source ORDER BY source',
+    );
+    logger.info('Prices by source:');
+    for (const row of sourceBreakdown.rows as any[]) {
+      logger.info(`  ${row.source}: ${row.count}`);
+    }
   } catch (error) {
     logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Test failed');
     process.exit(1);

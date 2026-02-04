@@ -1,6 +1,8 @@
 import { query as dbQuery } from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { EbayScraper } from '../scrapers/ebay.js';
+import { GoatScraper } from '../scrapers/goat.js';
+import { StockxScraper } from '../scrapers/stockx.js';
 import { PriceSource, SKU } from '../../types/index.js';
 
 /**
@@ -8,6 +10,8 @@ import { PriceSource, SKU } from '../../types/index.js';
  */
 export class PriceFetcher {
   private ebayScraper = new EbayScraper();
+  private goatScraper = new GoatScraper();
+  private stockxScraper = new StockxScraper();
 
   /**
    * Fetch eBay prices for a single sneaker
@@ -72,6 +76,133 @@ export class PriceFetcher {
   }
 
   /**
+   * Fetch GOAT prices for a single sneaker
+   */
+  async fetchGoatPricesForSku(
+    sku: SKU,
+  ): Promise<{ success: boolean; price?: number }> {
+    try {
+      logger.info({ skuCode: sku.sku_code }, 'Fetching GOAT prices');
+
+      // Build search query from SKU data
+      const query = sku.goat_id || this.buildSearchQuery(sku);
+
+      // Search GOAT
+      const listing = await this.goatScraper.getPriceForSku(query);
+
+      if (!listing) {
+        logger.warn({ skuCode: sku.sku_code, query }, 'No listing found on GOAT');
+        return { success: false };
+      }
+
+      const priceInDollars = listing.lowestPriceCents / 100;
+
+      logger.info(
+        { skuCode: sku.sku_code, price: priceInDollars, name: listing.name },
+        'GOAT price fetched',
+      );
+
+      // Store price in database
+      try {
+        await dbQuery(
+          `INSERT INTO prices (sku_id, source, price, timestamp)
+           VALUES ($1, $2, $3, $4)`,
+          [sku.id, PriceSource.GOAT, priceInDollars, listing.timestamp],
+        );
+      } catch (error) {
+        logger.debug({ skuCode: sku.sku_code, error }, 'Failed to store GOAT price');
+      }
+
+      return {
+        success: true,
+        price: priceInDollars,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          skuCode: sku.sku_code,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to fetch GOAT prices',
+      );
+      return { success: false };
+    }
+  }
+
+  /**
+   * Fetch StockX prices for a single sneaker
+   */
+  async fetchStockxPricesForSku(
+    sku: SKU,
+  ): Promise<{ success: boolean; price?: number }> {
+    try {
+      logger.info({ skuCode: sku.sku_code }, 'Fetching StockX prices');
+
+      // Build search query from SKU data
+      const query = sku.stockx_id || this.buildSearchQuery(sku);
+
+      // Search StockX
+      const listing = await this.stockxScraper.getPriceForSku(query);
+
+      if (!listing) {
+        logger.debug({ skuCode: sku.sku_code, query }, 'No listing found on StockX (scraper may be disabled)');
+        return { success: false };
+      }
+
+      logger.info(
+        { skuCode: sku.sku_code, price: listing.lowestAsk, name: listing.name },
+        'StockX price fetched',
+      );
+
+      // Store price in database
+      try {
+        await dbQuery(
+          `INSERT INTO prices (sku_id, source, price, timestamp)
+           VALUES ($1, $2, $3, $4)`,
+          [sku.id, PriceSource.STOCKX, listing.lowestAsk, listing.timestamp],
+        );
+      } catch (error) {
+        logger.debug({ skuCode: sku.sku_code, error }, 'Failed to store StockX price');
+      }
+
+      return {
+        success: true,
+        price: listing.lowestAsk,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          skuCode: sku.sku_code,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to fetch StockX prices',
+      );
+      return { success: false };
+    }
+  }
+
+  /**
+   * Fetch prices from all sources for a single SKU
+   */
+  async fetchAllPricesForSku(sku: SKU): Promise<{
+    ebay: { success: boolean; price?: number };
+    goat: { success: boolean; price?: number };
+    stockx: { success: boolean; price?: number };
+  }> {
+    const [ebayResult, goatResult, stockxResult] = await Promise.all([
+      this.fetchEbayPricesForSku(sku),
+      this.fetchGoatPricesForSku(sku),
+      this.fetchStockxPricesForSku(sku),
+    ]);
+
+    return {
+      ebay: ebayResult,
+      goat: goatResult,
+      stockx: stockxResult,
+    };
+  }
+
+  /**
    * Fetch prices for all SKUs (respecting tier-based frequency)
    */
   async fetchAllPrices(tier?: 1 | 2 | 3): Promise<void> {
@@ -89,25 +220,25 @@ export class PriceFetcher {
       const result = await dbQuery<SKU>(query, params);
       const skus = result.rows;
 
-      logger.info({ count: skus.length, tier }, 'Starting price fetch for SKUs');
+      logger.info({ count: skus.length, tier }, 'Starting price fetch for SKUs from all sources');
 
       for (const sku of skus) {
-        const result = await this.fetchEbayPricesForSku(sku);
+        const results = await this.fetchAllPricesForSku(sku);
 
-        if (result.success) {
-          logger.info(
-            {
-              skuCode: sku.sku_code,
-              price: result.price,
-              listingCount: result.listingCount,
-            },
-            'Successfully fetched eBay prices',
-          );
-        } else {
-          logger.warn({ skuCode: sku.sku_code }, 'Failed to fetch eBay prices');
-        }
+        const successCount = [results.ebay, results.goat, results.stockx].filter((r) => r.success).length;
 
-        // Add random delay between requests to avoid rate limiting
+        logger.info(
+          {
+            skuCode: sku.sku_code,
+            ebay: results.ebay.success ? `$${results.ebay.price}` : 'failed',
+            goat: results.goat.success ? `$${results.goat.price}` : 'failed',
+            stockx: results.stockx.success ? `$${results.stockx.price}` : 'disabled',
+            sourcesSucceeded: successCount,
+          },
+          'Fetched prices for SKU',
+        );
+
+        // Add random delay between SKUs to avoid rate limiting
         const delay = Math.random() * 2000 + 1000; // 1-3 seconds
         await new Promise((resolve) => setTimeout(resolve, delay));
       }

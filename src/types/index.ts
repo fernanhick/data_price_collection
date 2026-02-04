@@ -135,7 +135,29 @@ export interface eBayListing {
 
 export interface GOATListing {
   name: string;
-  lowest_ask: number;
+  slug: string;
+  sku: string;
+  lowestPriceCents: number;
+  retailPriceCents: number | null;
+  instantShipPriceCents: number | null;
+  brand: string;
+  colorway: string;
+  imageUrl: string;
+  url: string;
+  timestamp: Date;
+}
+
+export interface StockXListing {
+  name: string;
+  urlKey: string;
+  sku: string;
+  lowestAsk: number;
+  highestBid: number | null;
+  lastSale: number | null;
+  retailPrice: number | null;
+  brand: string;
+  colorway: string;
+  imageUrl: string;
   url: string;
   timestamp: Date;
 }
