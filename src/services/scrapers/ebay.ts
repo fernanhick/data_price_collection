@@ -1,5 +1,5 @@
 import { load } from 'cheerio';
-import { fetchUrl, delay, getRandomDelay } from '../../utils/http.js';
+import { fetchUrl } from '../../utils/http.js';
 import logger from '../../utils/logger.js';
 import { eBayListing } from '../../types/index.js';
 
@@ -11,7 +11,6 @@ import { eBayListing } from '../../types/index.js';
  */
 export class EbayScraper {
   private readonly baseUrl = 'https://www.ebay.com/sch/i.html';
-  private readonly soldFilter = '&LH_Sold=1'; // Filter for sold items
 
   /**
    * Search for sold listings on eBay
@@ -32,10 +31,7 @@ export class EbayScraper {
       // Parse HTML
       const listings = this.parseListings(html);
 
-      logger.info(
-        { query, found: listings.length, maxResults },
-        'eBay search completed',
-      );
+      logger.info({ query, found: listings.length, maxResults }, 'eBay search completed');
 
       return listings.slice(0, maxResults);
     } catch (error) {
@@ -74,7 +70,7 @@ export class EbayScraper {
     // eBay uses div elements with specific classes for listings
     const listingElements = $('div.s-item');
 
-    listingElements.each((index, element) => {
+    listingElements.each((_index, element) => {
       try {
         const $item = $(element);
 
@@ -111,10 +107,7 @@ export class EbayScraper {
           timestamp: new Date(),
         });
 
-        logger.debug(
-          { title, price, url, condition, sellerInfo },
-          'Extracted listing',
-        );
+        logger.debug({ title, price, url, condition, sellerInfo }, 'Extracted listing');
       } catch (error) {
         logger.debug(
           { error: error instanceof Error ? error.message : String(error) },

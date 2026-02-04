@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
 import ecmvCalculator from '../services/pricing/ecmvCalculator.js';
@@ -25,10 +24,7 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
     logger.info({ sku_code, userId }, 'Fetching price');
 
     // Get SKU from database
-    const skuResult = await dbQuery<SKU>(
-      'SELECT * FROM skus WHERE sku_code = $1',
-      [sku_code],
-    );
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE sku_code = $1', [sku_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -48,8 +44,10 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
     if (historyResult.rows.length > 0) {
       // Use most recent calculated ECMV
       priceData = historyResult.rows[0];
-      logger.debug({ sku_code, age: Date.now() - new Date(priceData.timestamp).getTime() },
-        'Using cached ECMV');
+      logger.debug(
+        { sku_code, age: Date.now() - new Date(priceData.timestamp).getTime() },
+        'Using cached ECMV',
+      );
     } else {
       // Calculate ECMV on the fly if not cached
       logger.debug({ sku_code }, 'ECMV not cached, calculating');
@@ -120,10 +118,7 @@ router.get('/:sku_code/history', async (req: Request, res: Response): Promise<vo
     logger.info({ sku_code, days: daysNum, userId }, 'Fetching price history');
 
     // Get SKU
-    const skuResult = await dbQuery<SKU>(
-      'SELECT * FROM skus WHERE sku_code = $1',
-      [sku_code],
-    );
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE sku_code = $1', [sku_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });

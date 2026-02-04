@@ -12,7 +12,9 @@ export class PriceFetcher {
   /**
    * Fetch eBay prices for a single sneaker
    */
-  async fetchEbayPricesForSku(sku: SKU): Promise<{ success: boolean; price?: number; listingCount?: number }> {
+  async fetchEbayPricesForSku(
+    sku: SKU,
+  ): Promise<{ success: boolean; price?: number; listingCount?: number }> {
     try {
       logger.info({ skuCode: sku.sku_code }, 'Fetching eBay prices');
 
@@ -48,10 +50,7 @@ export class PriceFetcher {
             [sku.id, PriceSource.EBAY, listing.price, listing.timestamp],
           );
         } catch (error) {
-          logger.debug(
-            { skuCode: sku.sku_code, error },
-            'Failed to store individual price',
-          );
+          logger.debug({ skuCode: sku.sku_code, error }, 'Failed to store individual price');
         }
       }
 

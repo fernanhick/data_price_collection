@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
-import { SKU, SKUTier } from '../types/index.js';
+import { SKU } from '../types/index.js';
 
 const router = Router();
 
@@ -133,7 +133,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     const userId = (req as any).user?.userId;
 
     // Validate input
-    const skuId = parseInt(id, 10);
+    const skuId = parseInt(typeof id === 'string' ? id : id[0], 10);
     if (isNaN(skuId) || skuId < 1) {
       res.status(400).json({ error: 'Invalid SKU ID' });
       return;
@@ -142,10 +142,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     logger.info({ skuId, userId }, 'Fetching SKU details');
 
     // Get SKU
-    const skuResult = await dbQuery<SKU>(
-      `SELECT * FROM skus WHERE id = $1`,
-      [skuId],
-    );
+    const skuResult = await dbQuery<SKU>(`SELECT * FROM skus WHERE id = $1`, [skuId]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });

@@ -34,7 +34,7 @@ async function getConvexPublicKey(): Promise<string> {
       throw new Error(`Failed to fetch JWKS: ${response.statusText}`);
     }
 
-    const jwks = await response.json() as { keys: any[] };
+    const jwks = (await response.json()) as { keys: any[] };
     if (!jwks.keys || jwks.keys.length === 0) {
       throw new Error('No keys found in JWKS');
     }
@@ -90,11 +90,7 @@ export async function verifyConvexJWT(
 }
 
 // Optional: Middleware for public endpoints (no JWT required)
-export function publicEndpoint(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function publicEndpoint(_req: Request, _res: Response, next: NextFunction): void {
   // Just pass through - no JWT verification needed
   next();
 }

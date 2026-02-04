@@ -75,19 +75,12 @@ async function testScraper() {
               price: fetchResult.price,
               listingCount: fetchResult.listingCount,
             });
-            logger.info(
-              `✅ Successfully fetched prices for ${sku.sku_code}`,
-            );
+            logger.info(`✅ Successfully fetched prices for ${sku.sku_code}`);
           } else {
-            logger.warn(
-              `⚠️  No prices found for ${sku.sku_code}`,
-            );
+            logger.warn(`⚠️  No prices found for ${sku.sku_code}`);
           }
         } catch (error) {
-          logger.error(
-            { skuCode: sku.sku_code, error },
-            'Failed to fetch prices',
-          );
+          logger.error({ skuCode: sku.sku_code, error }, 'Failed to fetch prices');
         }
 
         // Add delay between requests
@@ -102,12 +95,8 @@ async function testScraper() {
     const priceCount = await dbQuery('SELECT COUNT(*) as count FROM prices');
     const count = (priceCount.rows[0] as any).count;
     logger.info(`Total prices stored: ${count}`);
-
   } catch (error) {
-    logger.error(
-      { error: error instanceof Error ? error.message : String(error) },
-      'Test failed',
-    );
+    logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Test failed');
     process.exit(1);
   } finally {
     await closePool();

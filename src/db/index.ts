@@ -38,9 +38,7 @@ export async function query<T = any>(
 }
 
 // Transaction wrapper
-export async function transaction<T>(
-  callback: (client: any) => Promise<T>,
-): Promise<T> {
+export async function transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

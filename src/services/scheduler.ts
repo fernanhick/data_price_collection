@@ -17,6 +17,9 @@ export class PriceUpdateScheduler {
   private tier1Task: cron.ScheduledTask | null = null;
   private tier2Task: cron.ScheduledTask | null = null;
   private tier3Task: cron.ScheduledTask | null = null;
+  private tier1Running = false;
+  private tier2Running = false;
+  private tier3Running = false;
 
   /**
    * Start all scheduler tasks
@@ -56,6 +59,7 @@ export class PriceUpdateScheduler {
         await this.logFetchFailure('tier1');
       }
     });
+    this.tier1Running = true;
   }
 
   /**
@@ -78,6 +82,7 @@ export class PriceUpdateScheduler {
         await this.logFetchFailure('tier2');
       }
     });
+    this.tier2Running = true;
   }
 
   /**
@@ -100,6 +105,7 @@ export class PriceUpdateScheduler {
         await this.logFetchFailure('tier3');
       }
     });
+    this.tier3Running = true;
   }
 
   /**
@@ -125,15 +131,15 @@ export class PriceUpdateScheduler {
 
     if (this.tier1Task) {
       this.tier1Task.stop();
-      this.tier1Task.destroy();
+      this.tier1Running = false;
     }
     if (this.tier2Task) {
       this.tier2Task.stop();
-      this.tier2Task.destroy();
+      this.tier2Running = false;
     }
     if (this.tier3Task) {
       this.tier3Task.stop();
-      this.tier3Task.destroy();
+      this.tier3Running = false;
     }
 
     logger.info('✅ All price update schedules stopped');
@@ -151,15 +157,15 @@ export class PriceUpdateScheduler {
     return {
       enabled: config.scheduler.enabled,
       tier1: {
-        running: this.tier1Task?.status === 'started',
+        running: this.tier1Running,
         schedule: config.scheduler.tier1Cron,
       },
       tier2: {
-        running: this.tier2Task?.status === 'started',
+        running: this.tier2Running,
         schedule: config.scheduler.tier2Cron,
       },
       tier3: {
-        running: this.tier3Task?.status === 'started',
+        running: this.tier3Running,
         schedule: config.scheduler.tier3Cron,
       },
     };

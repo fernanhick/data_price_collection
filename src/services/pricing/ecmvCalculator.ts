@@ -1,6 +1,6 @@
 import { query as dbQuery } from '../../db/index.js';
 import logger from '../../utils/logger.js';
-import { ConfidenceLevel, SKU, Price, PriceResponse } from '../../types/index.js';
+import { ConfidenceLevel, SKU, Price } from '../../types/index.js';
 
 /**
  * ECMV (Estimated Current Market Value) Calculator
@@ -38,18 +38,10 @@ export class ECMVCalculator {
       const stockxPrice = this.getSourceMedian(pricesBySource.stockx);
 
       // Calculate weighted average
-      const { ecmv, weights } = this.calculateWeightedAverage(
-        eBayPrice,
-        goatPrice,
-        stockxPrice,
-      );
+      const { ecmv, weights } = this.calculateWeightedAverage(eBayPrice, goatPrice, stockxPrice);
 
       // Calculate confidence score
-      const confidence = this.calculateConfidence(
-        pricesBySource,
-        prices,
-        sku.tier,
-      );
+      const confidence = this.calculateConfidence(pricesBySource, prices, sku.tier);
 
       logger.debug(
         {
@@ -75,10 +67,7 @@ export class ECMVCalculator {
         },
       };
     } catch (error) {
-      logger.error(
-        { skuCode: sku.sku_code, error },
-        'Failed to calculate ECMV',
-      );
+      logger.error({ skuCode: sku.sku_code, error }, 'Failed to calculate ECMV');
       return null;
     }
   }
@@ -99,9 +88,7 @@ export class ECMVCalculator {
   /**
    * Group prices by source
    */
-  private groupBySource(
-    prices: Price[],
-  ): {
+  private groupBySource(prices: Price[]): {
     ebay: Price[];
     goat: Price[];
     stockx: Price[];

@@ -15,9 +15,11 @@ const app = express();
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-}));
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || '*',
+  }),
+);
 app.use(express.json());
 
 // Request logging middleware
@@ -25,18 +27,21 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    logger.info({
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration_ms: duration,
-    }, 'HTTP request completed');
+    logger.info(
+      {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        duration_ms: duration,
+      },
+      'HTTP request completed',
+    );
   });
   next();
 });
 
 // Health check endpoint (public)
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
   try {
     const dbHealthy = await healthCheck();
     const schedulerStatus = scheduler.getStatus();
@@ -47,7 +52,7 @@ app.get('/health', async (req, res) => {
       environment: config.nodeEnv,
       scheduler: schedulerStatus,
     });
-  } catch (error) {
+  } catch {
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -61,16 +66,25 @@ app.use('/api/prices', verifyConvexJWT, priceRoutes);
 app.use('/api/skus', verifyConvexJWT, skuRoutes);
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error({ error: err }, 'Unhandled error');
-  res.status(500).json({
-    error: 'Internal server error',
-    message: config.nodeEnv === 'development' ? err.message : undefined,
-  });
-});
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use(
+  (
+    _error: any,
+    _req: express.Request,
+    res: express.Response,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _next: express.NextFunction,
+  ): void => {
+    logger.error({ error: _error }, 'Unhandled error');
+    res.status(500).json({
+      error: 'Internal server error',
+      message: config.nodeEnv === 'development' ? _error.message : undefined,
+    });
+  },
+);
 
 // 404 handler
-app.use((req: express.Request, res: express.Response) => {
+app.use((_req: express.Request, res: express.Response) => {
   res.status(404).json({ error: 'Not found' });
 });
 
