@@ -2,62 +2,70 @@ import { query, closePool } from '../db/index.js';
 import logger from '../utils/logger.js';
 
 // Initial popular sneakers for bootstrapping
+// Using manufacturer style codes as the universal identifier
 const initialSneakers = [
   // Jordan 1
   {
-    sku_code: 'nike-jordan-1-retro-bred-2023',
+    sku_code: '555088-063',
+    brand_style_code: '555088-063',
     brand: 'Nike',
-    model: 'Air Jordan 1 Retro',
-    colorway: 'Bred',
+    model: 'Air Jordan 1 Retro High OG',
+    colorway: 'Bred Toe',
     tier: 1,
     retail_price: 170,
   },
   {
-    sku_code: 'nike-jordan-1-retro-chicago-2023',
+    sku_code: 'DZ5485-612',
+    brand_style_code: 'DZ5485-612',
     brand: 'Nike',
-    model: 'Air Jordan 1 Retro',
-    colorway: 'Chicago',
+    model: 'Air Jordan 1 Retro High OG',
+    colorway: 'Lost and Found',
     tier: 1,
-    retail_price: 170,
+    retail_price: 180,
   },
   {
-    sku_code: 'nike-jordan-1-retro-royal-2023',
+    sku_code: '555088-007',
+    brand_style_code: '555088-007',
     brand: 'Nike',
-    model: 'Air Jordan 1 Retro',
+    model: 'Air Jordan 1 Retro High OG',
     colorway: 'Royal',
     tier: 1,
-    retail_price: 170,
+    retail_price: 160,
   },
 
   // Dunk Low
   {
-    sku_code: 'nike-dunk-low-sb-panda-2023',
+    sku_code: 'DD1391-100',
+    brand_style_code: 'DD1391-100',
     brand: 'Nike',
-    model: 'Dunk Low SB',
+    model: 'Dunk Low',
     colorway: 'Panda',
     tier: 1,
-    retail_price: 125,
+    retail_price: 110,
   },
   {
-    sku_code: 'nike-dunk-low-vintage-green-2023',
+    sku_code: 'DV0833-300',
+    brand_style_code: 'DV0833-300',
     brand: 'Nike',
     model: 'Dunk Low',
     colorway: 'Vintage Green',
     tier: 2,
-    retail_price: 130,
+    retail_price: 115,
   },
 
   // Yeezy
   {
-    sku_code: 'adidas-yeezy-boost-350-v2-oreo-2023',
+    sku_code: 'BY1604',
+    brand_style_code: 'BY1604',
     brand: 'Adidas',
     model: 'Yeezy Boost 350 V2',
-    colorway: 'Oreo',
+    colorway: 'Core Black White',
     tier: 1,
     retail_price: 220,
   },
   {
-    sku_code: 'adidas-yeezy-boost-350-v2-zebra-2023',
+    sku_code: 'CP9654',
+    brand_style_code: 'CP9654',
     brand: 'Adidas',
     model: 'Yeezy Boost 350 V2',
     colorway: 'Zebra',
@@ -67,17 +75,19 @@ const initialSneakers = [
 
   // Travis Scott
   {
-    sku_code: 'nike-jordan-1-travis-scott-low-2023',
+    sku_code: 'DM7866-162',
+    brand_style_code: 'DM7866-162',
     brand: 'Nike',
-    model: 'Air Jordan 1 x Travis Scott',
+    model: 'Air Jordan 1 Low x Travis Scott',
     colorway: 'Reverse Mocha',
     tier: 1,
-    retail_price: 190,
+    retail_price: 150,
   },
 
   // New Balance
   {
-    sku_code: 'new-balance-990v6-grey-2023',
+    sku_code: 'M990GL6',
+    brand_style_code: 'M990GL6',
     brand: 'New Balance',
     model: '990v6',
     colorway: 'Grey',
@@ -85,35 +95,39 @@ const initialSneakers = [
     retail_price: 210,
   },
   {
-    sku_code: 'new-balance-550-white-black-2023',
+    sku_code: 'BB550WT1',
+    brand_style_code: 'BB550WT1',
     brand: 'New Balance',
     model: '550',
-    colorway: 'White Black',
+    colorway: 'White Green',
     tier: 2,
-    retail_price: 150,
+    retail_price: 120,
   },
 
   // Reebok
   {
-    sku_code: 'reebok-question-mid-black-2023',
+    sku_code: 'FZ4387',
+    brand_style_code: 'FZ4387',
     brand: 'Reebok',
     model: 'Question Mid',
-    colorway: 'Black',
+    colorway: 'Black Chalk',
     tier: 2,
-    retail_price: 160,
+    retail_price: 140,
   },
 
   // Tier 3 (Long tail)
   {
-    sku_code: 'nike-air-max-90-white-black-2023',
+    sku_code: 'CN8490-100',
+    brand_style_code: 'CN8490-100',
     brand: 'Nike',
     model: 'Air Max 90',
     colorway: 'White Black',
     tier: 3,
-    retail_price: 140,
+    retail_price: 130,
   },
   {
-    sku_code: 'adidas-stan-smith-white-green-2023',
+    sku_code: 'FX5501',
+    brand_style_code: 'FX5501',
     brand: 'Adidas',
     model: 'Stan Smith',
     colorway: 'White Green',
@@ -121,7 +135,8 @@ const initialSneakers = [
     retail_price: 90,
   },
   {
-    sku_code: 'puma-rs-x-black-white-2023',
+    sku_code: '369449-01',
+    brand_style_code: '369449-01',
     brand: 'Puma',
     model: 'RS-X',
     colorway: 'Black White',
@@ -147,12 +162,19 @@ async function seed() {
     for (const sneaker of initialSneakers) {
       const result = await query(
         `INSERT INTO skus (
-          sku_code, brand, model, colorway, tier, retail_price
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (sku_code) DO NOTHING
+          sku_code, brand_style_code, brand, model, colorway, tier, retail_price
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (sku_code) DO UPDATE SET
+          brand_style_code = EXCLUDED.brand_style_code,
+          brand = EXCLUDED.brand,
+          model = EXCLUDED.model,
+          colorway = EXCLUDED.colorway,
+          tier = EXCLUDED.tier,
+          retail_price = EXCLUDED.retail_price
         RETURNING id`,
         [
           sneaker.sku_code,
+          sneaker.brand_style_code,
           sneaker.brand,
           sneaker.model,
           sneaker.colorway,

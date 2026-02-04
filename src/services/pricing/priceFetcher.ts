@@ -31,9 +31,10 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number; listingCount?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code }, 'Fetching eBay prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching eBay prices');
 
-      // Build search query from SKU data
+      // eBay sellers use descriptive names more than style codes, so prefer custom query or built query
+      // If custom query exists, use it. Otherwise build from brand + model + colorway (+ style code)
       const query = sku.ebay_query || this.buildSearchQuery(sku);
 
       // Search eBay
@@ -93,10 +94,10 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code }, 'Fetching GOAT prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching GOAT prices');
 
-      // Build search query from SKU data
-      const query = sku.goat_id || this.buildSearchQuery(sku);
+      // Prefer style code, then custom ID, then build from SKU data
+      const query = sku.brand_style_code || sku.goat_id || this.buildSearchQuery(sku);
 
       // Search GOAT
       const listing = await this.goatScraper.getPriceForSku(query);
@@ -147,10 +148,10 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code }, 'Fetching StockX prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching StockX prices');
 
-      // Build search query from SKU data
-      const query = sku.stockx_id || this.buildSearchQuery(sku);
+      // Prefer style code, then custom ID, then build from SKU data
+      const query = sku.brand_style_code || sku.stockx_id || this.buildSearchQuery(sku);
 
       // Search StockX
       const listing = await this.stockxScraper.getPriceForSku(query);
@@ -290,12 +291,18 @@ export class PriceFetcher {
 
   /**
    * Build eBay search query from SKU data
+   * Includes brand, model, colorway, and optionally style code for better matching
    */
   private buildSearchQuery(sku: SKU): string {
     const parts = [sku.brand, sku.model];
 
     if (sku.colorway) {
       parts.push(sku.colorway);
+    }
+
+    // Add style code for better matching on eBay
+    if (sku.brand_style_code) {
+      parts.push(sku.brand_style_code);
     }
 
     return parts.filter((p) => p).join(' ');

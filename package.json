@@ -14,7 +14,8 @@
     "format": "prettier --write src/**/*.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
-    "scraper:test": "tsx src/scripts/test-scraper.ts"
+    "scraper:test": "tsx src/scripts/test-scraper.ts",
+    "scraper:test-stylecode": "tsx src/scripts/test-stylecode.ts"
   },
   "keywords": [
     "sneaker",
