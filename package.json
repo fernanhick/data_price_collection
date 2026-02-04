@@ -5,16 +5,16 @@
   "main": "dist/src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "ts-node --esm src/index.ts",
+    "dev": "tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/src/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src/**/*.ts",
-    "db:migrate": "npm run build && node dist/scripts/migrate.js",
-    "db:seed": "npm run build && node dist/scripts/seed.js",
-    "scraper:test": "npm run build && node dist/scripts/test-scraper.js"
+    "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:seed": "tsx src/scripts/seed.ts",
+    "scraper:test": "tsx src/scripts/test-scraper.ts"
   },
   "keywords": [
     "sneaker",
@@ -55,6 +55,7 @@
     "prettier": "^3.1.1",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }
