@@ -44,19 +44,8 @@ router.get('/analytics', async (req: Request, res: Response) => {
     // Price ranges
     const priceRanges = await query(`
       SELECT
-        CASE
-          WHEN retail_price < 100 THEN 'Under $100'
-          WHEN retail_price >= 100 AND retail_price < 150 THEN '$100-$150'
-          WHEN retail_price >= 150 AND retail_price < 200 THEN '$150-$200'
-          WHEN retail_price >= 200 AND retail_price < 300 THEN '$200-$300'
-          WHEN retail_price >= 300 THEN '$300+'
-          ELSE 'Unknown'
-        END as price_range,
-        COUNT(*) as count
-      FROM skus
-      WHERE retail_price IS NOT NULL
-      GROUP BY price_range
-      ORDER BY
+        price_range,
+        count,
         CASE
           WHEN price_range = 'Under $100' THEN 1
           WHEN price_range = '$100-$150' THEN 2
@@ -64,7 +53,31 @@ router.get('/analytics', async (req: Request, res: Response) => {
           WHEN price_range = '$200-$300' THEN 4
           WHEN price_range = '$300+' THEN 5
           ELSE 6
-        END
+        END as sort_order
+      FROM (
+        SELECT
+          CASE
+            WHEN retail_price < 100 THEN 'Under $100'
+            WHEN retail_price >= 100 AND retail_price < 150 THEN '$100-$150'
+            WHEN retail_price >= 150 AND retail_price < 200 THEN '$150-$200'
+            WHEN retail_price >= 200 AND retail_price < 300 THEN '$200-$300'
+            WHEN retail_price >= 300 THEN '$300+'
+            ELSE 'Unknown'
+          END as price_range,
+          COUNT(*) as count
+        FROM skus
+        WHERE retail_price IS NOT NULL
+        GROUP BY
+          CASE
+            WHEN retail_price < 100 THEN 'Under $100'
+            WHEN retail_price >= 100 AND retail_price < 150 THEN '$100-$150'
+            WHEN retail_price >= 150 AND retail_price < 200 THEN '$150-$200'
+            WHEN retail_price >= 200 AND retail_price < 300 THEN '$200-$300'
+            WHEN retail_price >= 300 THEN '$300+'
+            ELSE 'Unknown'
+          END
+      ) subquery
+      ORDER BY sort_order
     `);
 
     // Recently added (last 30 days)

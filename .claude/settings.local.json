@@ -22,7 +22,13 @@
       "Bash(npm run scraper:test:*)",
       "Bash(PGPASSWORD=fErchO99 psql:*)",
       "Bash(curl:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(psql:*)",
+      "Bash(npm run db:seed:*)",
+      "Bash(npm run scraper:test-stylecode:*)",
+      "Bash(npm run dev:generate-jwt:*)",
+      "Bash(npm run db:migrate:*)",
+      "WebFetch(domain:api.kicks.dev)"
     ]
   }
 }

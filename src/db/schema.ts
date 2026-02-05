@@ -2,8 +2,8 @@ export const schema = `
 -- SKU Catalog
 CREATE TABLE IF NOT EXISTS skus (
   id SERIAL PRIMARY KEY,
-  sku_code VARCHAR(100) UNIQUE NOT NULL,
-  brand_style_code VARCHAR(50),
+  sku_code VARCHAR(255) UNIQUE NOT NULL,
+  brand_style_code VARCHAR(255),
   brand VARCHAR(100) NOT NULL,
   model VARCHAR(100) NOT NULL,
   colorway VARCHAR(255),

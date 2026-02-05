@@ -18,7 +18,9 @@ function getToken() {
 }
 
 function setToken(token) {
-    localStorage.setItem('admin_jwt_token', token);
+    // Remove all whitespace (spaces, newlines, tabs) from token
+    const cleanToken = token.replace(/\s+/g, '');
+    localStorage.setItem('admin_jwt_token', cleanToken);
 }
 
 function clearToken() {

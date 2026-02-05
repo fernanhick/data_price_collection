@@ -3,11 +3,17 @@ import { Request, Response, NextFunction } from 'express';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { JWTPayload } from '../types/index.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Cache for Convex public key
 let cachedPublicKey: string | null = null;
 let cacheTime: number = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// Development mode - use local keys instead of Convex
+const isDevelopment = process.env.NODE_ENV === 'development';
+const DEV_PUBLIC_KEY_PATH = path.join(process.cwd(), 'scripts', '.dev-keys', 'public.pem');
 
 // Convert JWK to PEM format
 async function convertJWKToPEM(jwk: any): Promise<string> {
@@ -19,8 +25,33 @@ async function convertJWKToPEM(jwk: any): Promise<string> {
   return publicKey.export({ format: 'pem', type: 'spki' }) as string;
 }
 
+// Get development public key from local file
+function getDevPublicKey(): string {
+  if (!fs.existsSync(DEV_PUBLIC_KEY_PATH)) {
+    throw new Error(
+      'Development public key not found. Run: npm run dev:generate-jwt',
+    );
+  }
+  return fs.readFileSync(DEV_PUBLIC_KEY_PATH, 'utf8');
+}
+
 // Fetch and cache Convex public key
 async function getConvexPublicKey(): Promise<string> {
+  // In development mode, use local keys
+  if (isDevelopment) {
+    try {
+      const devKey = getDevPublicKey();
+      logger.info('Using development public key for JWT verification');
+      return devKey;
+    } catch (error) {
+      logger.warn(
+        { error },
+        'Development key not found, falling back to Convex (will likely fail)',
+      );
+      // Fall through to Convex key fetch
+    }
+  }
+
   const now = Date.now();
 
   // Return cached key if still valid
@@ -70,10 +101,16 @@ export async function verifyConvexJWT(
     const publicKey = await getConvexPublicKey();
 
     // Verify token signature
-    const decoded = jwt.verify(token, publicKey, {
+    // In development, skip issuer check for local tokens
+    const verifyOptions: jwt.VerifyOptions = {
       algorithms: ['RS256'],
-      issuer: config.convex.url,
-    }) as JWTPayload;
+    };
+
+    if (!isDevelopment) {
+      verifyOptions.issuer = config.convex.url;
+    }
+
+    const decoded = jwt.verify(token, publicKey, verifyOptions) as JWTPayload;
 
     // Attach user info to request
     (req as any).user = {

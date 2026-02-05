@@ -1,0 +1,34 @@
+[Unit]
+Description=QEMU Sneaker Price Collector VM
+After=network.target
+
+[Service]
+Type=simple
+User=%u
+# Replace /path/to/vm-disk.qcow2 with your actual VM disk image path
+ExecStart=/usr/bin/qemu-system-x86_64 \
+  -enable-kvm \
+  -m 4096 \
+  -smp 2 \
+  -drive file=/path/to/vm-disk.qcow2,format=qcow2,if=virtio \
+  -device virtio-net-pci,netdev=net0 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::3000-:3000 \
+  -name sneaker-collector \
+  -daemonize \
+  -pidfile /run/user/%U/qemu-sneaker-collector.pid \
+  -display none \
+  -monitor unix:/run/user/%U/qemu-sneaker-collector.sock,server,nowait
+
+# Graceful shutdown
+ExecStop=/bin/sh -c 'echo system_powerdown | socat - UNIX-CONNECT:/run/user/%U/qemu-sneaker-collector.sock'
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+MemoryMax=5G
+CPUQuota=200%
+
+[Install]
+WantedBy=default.target
