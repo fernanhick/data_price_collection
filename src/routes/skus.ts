@@ -124,6 +124,136 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
+ * GET /api/skus/catalog
+ * Get lightweight catalog for sneaker selection in mobile app
+ * Returns all sneakers with minimal fields for autocomplete/selection
+ *
+ * IMPORTANT: This route must be before /:id to avoid path collision
+ */
+router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { search, limit = '100' } = req.query;
+    const userId = (req as any).user?.userId;
+
+    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 500);
+
+    logger.info({ search, limit: limitNum, userId }, 'Fetching catalog');
+
+    let whereClause = '';
+    const params: any[] = [];
+
+    // Optional search filter
+    if (search && typeof search === 'string' && search.length > 0) {
+      const searchTerm = `%${search}%`;
+      whereClause = `WHERE (
+        sku_code ILIKE $1 OR
+        brand ILIKE $2 OR
+        model ILIKE $3 OR
+        colorway ILIKE $4 OR
+        brand_style_code ILIKE $5
+      )`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    // Get catalog with minimal fields
+    const result = await dbQuery<SKU>(
+      `SELECT id, sku_code, brand, model, colorway, brand_style_code, retail_price, tier
+       FROM skus ${whereClause}
+       ORDER BY tier ASC, brand ASC, model ASC
+       LIMIT $${params.length + 1}`,
+      [...params, limitNum],
+    );
+
+    // Log usage
+    try {
+      await dbQuery(
+        `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [userId, '/api/skus/catalog', 'GET', 200, new Date()],
+      );
+    } catch (error) {
+      logger.debug({ error }, 'Failed to log API usage');
+    }
+
+    res.json({
+      count: result.rows.length,
+      catalog: result.rows.map((sku) => ({
+        id: sku.id,
+        sku_code: sku.sku_code,
+        brand: sku.brand,
+        model: sku.model,
+        colorway: sku.colorway,
+        style_code: sku.brand_style_code,
+        retail_price: sku.retail_price,
+        tier: sku.tier,
+        display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
+      })),
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed to fetch catalog');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/skus/trending/popular
+ * Get most popular sneakers (most price data points)
+ *
+ * IMPORTANT: This route must be before /:id to avoid path collision
+ */
+router.get('/trending/popular', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { limit = '10' } = req.query;
+    const userId = (req as any).user?.userId;
+
+    const limitNum = Math.min(parseInt(limit as string, 10) || 10, 50);
+
+    logger.info({ limit: limitNum, userId }, 'Fetching popular sneakers');
+
+    // Get SKUs with most price data
+    const result = await dbQuery(
+      `SELECT s.id, s.sku_code, s.brand, s.model, s.colorway, s.tier,
+              COUNT(p.id) as price_count,
+              AVG(p.price) as avg_price
+       FROM skus s
+       LEFT JOIN prices p ON s.id = p.sku_id
+       GROUP BY s.id, s.sku_code, s.brand, s.model, s.colorway, s.tier
+       ORDER BY price_count DESC, s.tier ASC
+       LIMIT $1`,
+      [limitNum],
+    );
+
+    // Log usage
+    try {
+      await dbQuery(
+        `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [userId, '/api/skus/trending/popular', 'GET', 200, new Date()],
+      );
+    } catch (error) {
+      logger.debug({ error }, 'Failed to log API usage');
+    }
+
+    res.json({
+      count: result.rows.length,
+      trending: result.rows.map((row: any) => ({
+        id: row.id,
+        sku_code: row.sku_code,
+        brand: row.brand,
+        model: row.model,
+        colorway: row.colorway,
+        tier: row.tier,
+        price_data_points: row.price_count,
+        average_price: row.avg_price ? parseFloat(row.avg_price) : null,
+      })),
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed to fetch popular sneakers');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * GET /api/skus/:id
  * Get details for a single SKU
  */
@@ -206,62 +336,6 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     logger.error({ error }, 'Failed to fetch SKU details');
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * GET /api/skus/trending/popular
- * Get most popular sneakers (most price data points)
- */
-router.get('/trending/popular', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { limit = '10' } = req.query;
-    const userId = (req as any).user?.userId;
-
-    const limitNum = Math.min(parseInt(limit as string, 10) || 10, 50);
-
-    logger.info({ limit: limitNum, userId }, 'Fetching popular sneakers');
-
-    // Get SKUs with most price data
-    const result = await dbQuery(
-      `SELECT s.id, s.sku_code, s.brand, s.model, s.colorway, s.tier,
-              COUNT(p.id) as price_count,
-              AVG(p.price) as avg_price
-       FROM skus s
-       LEFT JOIN prices p ON s.id = p.sku_id
-       GROUP BY s.id, s.sku_code, s.brand, s.model, s.colorway, s.tier
-       ORDER BY price_count DESC, s.tier ASC
-       LIMIT $1`,
-      [limitNum],
-    );
-
-    // Log usage
-    try {
-      await dbQuery(
-        `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [userId, '/api/skus/trending/popular', 'GET', 200, new Date()],
-      );
-    } catch (error) {
-      logger.debug({ error }, 'Failed to log API usage');
-    }
-
-    res.json({
-      count: result.rows.length,
-      trending: result.rows.map((row: any) => ({
-        id: row.id,
-        sku_code: row.sku_code,
-        brand: row.brand,
-        model: row.model,
-        colorway: row.colorway,
-        tier: row.tier,
-        price_data_points: row.price_count,
-        average_price: row.avg_price ? parseFloat(row.avg_price) : null,
-      })),
-    });
-  } catch (error) {
-    logger.error({ error }, 'Failed to fetch popular sneakers');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

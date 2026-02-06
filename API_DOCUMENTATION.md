@@ -236,7 +236,56 @@ GET /api/skus?limit=20&offset=20
 - `400` - Invalid query parameters
 - `401` - Unauthorized (missing or invalid JWT)
 
-### 5. Get Sneaker Details
+### 5. Get Sneaker Catalog (Lightweight)
+
+```
+GET /api/skus/catalog?search=jordan&limit=100
+Authorization: Bearer <JWT_TOKEN>
+```
+
+Get lightweight catalog of all sneakers for selection in mobile app "Add Sneaker" feature.
+
+**Parameters:**
+- `search` (query, optional) - Filter by brand, model, colorway, style code, or SKU code
+- `limit` (query, optional) - Max results (default: 100, max: 500)
+
+**Response (200):**
+```json
+{
+  "count": 342,
+  "catalog": [
+    {
+      "id": 1,
+      "sku_code": "nike-jordan-1-retro-bred-2023",
+      "brand": "Nike",
+      "model": "Air Jordan 1 Retro",
+      "colorway": "Bred",
+      "style_code": "555088-610",
+      "retail_price": 170.00,
+      "tier": 1,
+      "display_name": "Nike Air Jordan 1 Retro - Bred"
+    }
+  ]
+}
+```
+
+**Use Cases:**
+- User selecting a sneaker from catalog to add to their collection
+- Autocomplete/typeahead search in mobile app
+- Browse all available sneakers with minimal data transfer
+- Quick catalog lookup without full SKU details
+
+**Differences from `/api/skus`:**
+- Returns `display_name` pre-formatted for UI
+- Excludes timestamps and metadata
+- Optimized for selection/autocomplete UI
+- Higher default limit (100 vs 20)
+
+**Error Responses:**
+- `400` - Invalid parameters
+- `401` - Unauthorized (missing or invalid JWT)
+
+### 6. Get Sneaker Details
 
 ```
 GET /api/skus/:id
@@ -282,7 +331,7 @@ Get detailed information about a specific sneaker.
 - `404` - SKU not found
 - `401` - Unauthorized (missing or invalid JWT)
 
-### 6. Get Trending Sneakers
+### 7. Get Trending Sneakers
 
 ```
 GET /api/skus/trending/popular?limit=10
