@@ -15,6 +15,7 @@ import priceRoutes from './routes/prices.js';
 import skuRoutes from './routes/skus.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
+import authRoutes from './routes/auth.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -23,7 +24,26 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"], // Allow onclick handlers
+        styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"], // Allow fetch/XHR to same origin
+        fontSrc: ["'self'", 'https:', 'data:'],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        upgradeInsecureRequests: null, // Explicitly disable for HTTP development
+      },
+    },
+    crossOriginOpenerPolicy: false, // Disable COOP warning
+  }),
+);
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || '*',
@@ -72,6 +92,9 @@ app.get('/health', async (_req, res) => {
 
 // Static files for admin dashboard
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
+
+// Auth routes (public - no JWT required)
+app.use('/api/auth', authRoutes);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);
