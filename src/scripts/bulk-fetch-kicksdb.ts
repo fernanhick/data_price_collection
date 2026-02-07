@@ -141,7 +141,7 @@ async function fetchFromKicksDB(options: BulkFetchOptions = {}): Promise<KicksDB
       throw new Error(`KicksDB API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     // KicksDB StockX endpoint returns: { data: [...], pagination: {...} }
     let products = data.data || data.products || data;
@@ -308,7 +308,7 @@ async function insertSneaker(sku: ReturnType<typeof mapProductToSKU>): Promise<b
         release_date, retail_price, category, tier,
         stockx_id, goat_id, ebay_query
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (sku_code) DO NOTHING`,
+      ON CONFLICT (brand_style_code) DO NOTHING`,
       [
         sku.sku_code,
         sku.brand_style_code,

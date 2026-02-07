@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple API Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; }
+        #output { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Simple API Test</h1>
+    <p>Testing different methods to call the API</p>
+
+    <button onclick="testWithFetch()">Test with Fetch</button>
+    <button onclick="testWithXHR()">Test with XMLHttpRequest</button>
+    <button onclick="testWithForm()">Test with Form Submit</button>
+
+    <div id="output"></div>
+
+    <script>
+        const output = document.getElementById('output');
+
+        function log(msg) {
+            output.textContent += msg + '\n';
+        }
+
+        // Test 1: Fetch API
+        async function testWithFetch() {
+            output.textContent = '';
+            log('Testing with Fetch API...');
+            try {
+                const response = await fetch('/health');
+                log('Status: ' + response.status);
+                const data = await response.json();
+                log('Success: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('ERROR: ' + error.message);
+                log('Error name: ' + error.name);
+            }
+        }
+
+        // Test 2: XMLHttpRequest
+        function testWithXHR() {
+            output.textContent = '';
+            log('Testing with XMLHttpRequest...');
+            const xhr = new XMLHttpRequest();
+
+            xhr.onload = function() {
+                log('Status: ' + xhr.status);
+                log('Response: ' + xhr.responseText.substring(0, 200));
+            };
+
+            xhr.onerror = function() {
+                log('ERROR: XHR request failed');
+                log('ReadyState: ' + xhr.readyState);
+                log('Status: ' + xhr.status);
+            };
+
+            xhr.open('GET', '/health');
+            xhr.send();
+        }
+
+        // Test 3: Form submit (will redirect)
+        function testWithForm() {
+            window.location.href = '/health';
+        }
+
+        log('Page loaded successfully');
+        log('Location: ' + window.location.href);
+    </script>
+</body>
+</html>

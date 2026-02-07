@@ -2,8 +2,8 @@ export const schema = `
 -- SKU Catalog
 CREATE TABLE IF NOT EXISTS skus (
   id SERIAL PRIMARY KEY,
-  sku_code VARCHAR(255) UNIQUE NOT NULL,
-  brand_style_code VARCHAR(255),
+  sku_code VARCHAR(255),  -- Optional, for backward compatibility
+  brand_style_code VARCHAR(255) UNIQUE NOT NULL,  -- Primary identifier
   brand VARCHAR(100) NOT NULL,
   model VARCHAR(100) NOT NULL,
   colorway VARCHAR(255),
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS skus (
 
 CREATE INDEX IF NOT EXISTS idx_skus_tier ON skus(tier);
 CREATE INDEX IF NOT EXISTS idx_skus_brand ON skus(brand);
+CREATE INDEX IF NOT EXISTS idx_skus_brand_style_code ON skus(brand_style_code);
 CREATE INDEX IF NOT EXISTS idx_skus_sku_code ON skus(sku_code);
 
 -- Individual Price Points from Sources
@@ -77,4 +78,16 @@ CREATE TABLE IF NOT EXISTS api_usage (
 
 CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp DESC);
+
+-- Admin Users (for dashboard authentication)
+CREATE TABLE IF NOT EXISTS admin_users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(100),
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_login TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
 `;

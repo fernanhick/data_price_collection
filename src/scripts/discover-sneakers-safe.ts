@@ -143,7 +143,7 @@ async function discoverSneakersSafe() {
           `INSERT INTO skus (
             sku_code, brand_style_code, brand, model, colorway, tier, retail_price
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (sku_code) DO NOTHING
+          ON CONFLICT (brand_style_code) DO NOTHING
           RETURNING id`,
           [
             sneaker.sku_code,

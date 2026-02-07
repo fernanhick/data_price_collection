@@ -7,24 +7,24 @@ import { SKU, PriceResponse } from '../types/index.js';
 const router = Router();
 
 /**
- * GET /api/prices/:sku_code
+ * GET /api/prices/:style_code
  * Get current ECMV and price breakdown for a sneaker
  */
-router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
+router.get('/:style_code', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sku_code } = req.params;
+    const { style_code } = req.params;
     const userId = (req as any).user?.userId; // From JWT
 
     // Validate input
-    if (!sku_code || typeof sku_code !== 'string' || sku_code.length === 0) {
-      res.status(400).json({ error: 'Invalid sku_code' });
+    if (!style_code || typeof style_code !== 'string' || style_code.length === 0) {
+      res.status(400).json({ error: 'Invalid style_code' });
       return;
     }
 
-    logger.info({ sku_code, userId }, 'Fetching price');
+    logger.info({ style_code, userId }, 'Fetching price');
 
     // Get SKU from database
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE sku_code = $1', [sku_code]);
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE brand_style_code = $1', [style_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -45,12 +45,12 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
       // Use most recent calculated ECMV
       priceData = historyResult.rows[0];
       logger.debug(
-        { sku_code, age: Date.now() - new Date(priceData.timestamp).getTime() },
+        { style_code, age: Date.now() - new Date(priceData.timestamp).getTime() },
         'Using cached ECMV',
       );
     } else {
       // Calculate ECMV on the fly if not cached
-      logger.debug({ sku_code }, 'ECMV not cached, calculating');
+      logger.debug({ style_code }, 'ECMV not cached, calculating');
       const calc = await ecmvCalculator.calculateECMV(sku);
 
       if (!calc) {
@@ -69,7 +69,7 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
       await dbQuery(
         `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
          VALUES ($1, $2, $3, $4, $5)`,
-        [userId, `/api/prices/${sku_code}`, 'GET', 200, new Date()],
+        [userId, `/api/prices/${style_code}`, 'GET', 200, new Date()],
       );
     } catch (error) {
       logger.debug({ error }, 'Failed to log API usage');
@@ -77,7 +77,7 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
 
     // Format response
     const response: PriceResponse = {
-      sku_code: sku.sku_code,
+      sku_code: sku.sku_code,  // Deprecated but included for backward compatibility
       style_code: sku.brand_style_code,
       ecmv: priceData.ecmv,
       confidence: priceData.confidence,
@@ -94,18 +94,18 @@ router.get('/:sku_code', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * GET /api/prices/:sku_code/history
+ * GET /api/prices/:style_code/history
  * Get price history for a sneaker (for trending)
  */
-router.get('/:sku_code/history', async (req: Request, res: Response): Promise<void> => {
+router.get('/:style_code/history', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sku_code } = req.params;
+    const { style_code } = req.params;
     const { days = '30' } = req.query;
     const userId = (req as any).user?.userId;
 
     // Validate input
-    if (!sku_code || typeof sku_code !== 'string') {
-      res.status(400).json({ error: 'Invalid sku_code' });
+    if (!style_code || typeof style_code !== 'string') {
+      res.status(400).json({ error: 'Invalid style_code' });
       return;
     }
 
@@ -115,10 +115,10 @@ router.get('/:sku_code/history', async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    logger.info({ sku_code, days: daysNum, userId }, 'Fetching price history');
+    logger.info({ style_code, days: daysNum, userId }, 'Fetching price history');
 
     // Get SKU
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE sku_code = $1', [sku_code]);
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE brand_style_code = $1', [style_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -148,7 +148,7 @@ router.get('/:sku_code/history', async (req: Request, res: Response): Promise<vo
       await dbQuery(
         `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
          VALUES ($1, $2, $3, $4, $5)`,
-        [userId, `/api/prices/${sku_code}/history`, 'GET', 200, new Date()],
+        [userId, `/api/prices/${style_code}/history`, 'GET', 200, new Date()],
       );
     } catch (error) {
       logger.debug({ error }, 'Failed to log API usage');
@@ -164,7 +164,7 @@ router.get('/:sku_code/history', async (req: Request, res: Response): Promise<vo
     };
 
     res.json({
-      sku_code,
+      sku_code: sku.sku_code,  // Deprecated but included
       style_code: sku.brand_style_code,
       days: daysNum,
       data_points: historyResult.rows.length,

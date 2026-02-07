@@ -111,10 +111,12 @@ export class StockxScraper {
         const products: any[] = [];
 
         // Find all product links - StockX uses links to product pages
+        // @ts-ignore - document exists in browser context
         const productLinks = document.querySelectorAll('a[href*="/"]');
 
         const seenUrls = new Set<string>();
 
+        // @ts-ignore - el is HTMLElement in browser context
         productLinks.forEach((el) => {
           if (products.length >= max) return;
 

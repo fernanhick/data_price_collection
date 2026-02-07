@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - JavaScript Test</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:active {
+            background: #0056b3;
+        }
+        #log {
+            background: #f8f9fa;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Mobile Debug Page</h1>
+
+    <div id="status" class="status info">
+        Loading...
+    </div>
+
+    <h2>Tests:</h2>
+
+    <button id="testBtn">Test Button Click</button>
+    <button id="testApiBtn">Test API Call</button>
+    <button id="testLoginBtn">Test Login API</button>
+
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#333';
+            div.textContent = `[${time}] ${message}`;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Test 1: JavaScript loaded
+        addLog('✅ JavaScript loaded successfully');
+        status.textContent = '✅ JavaScript is working!';
+        status.className = 'status success';
+
+        // Test 2: API base
+        const API_BASE = window.location.origin;
+        addLog(`API_BASE: ${API_BASE}`);
+        addLog(`Current URL: ${window.location.href}`);
+        addLog(`Protocol: ${window.location.protocol}`);
+        addLog(`Hostname: ${window.location.hostname}`);
+        addLog(`Port: ${window.location.port}`);
+
+        // Test 3: Button click
+        document.getElementById('testBtn').addEventListener('click', () => {
+            addLog('✅ Button click handler working!', 'success');
+        });
+
+        // Test 4: API health check
+        document.getElementById('testApiBtn').addEventListener('click', async () => {
+            try {
+                addLog('Testing API health endpoint...');
+                addLog(`Calling: ${API_BASE}/health`);
+                const response = await fetch(`${API_BASE}/health`);
+                addLog(`Response status: ${response.status} ${response.statusText}`);
+                const data = await response.json();
+                addLog(`✅ API Response: ${JSON.stringify(data).substring(0, 100)}...`, 'success');
+            } catch (error) {
+                addLog(`❌ API Error: ${error.message}`, 'error');
+                addLog(`Error stack: ${error.stack}`, 'error');
+            }
+        });
+
+        // Test 5: Login API
+        document.getElementById('testLoginBtn').addEventListener('click', async () => {
+            try {
+                addLog('Testing login API...');
+                addLog(`Calling: ${API_BASE}/api/auth/login`);
+
+                const requestBody = {
+                    email: 'fernanhick@gmail.com',
+                    password: 'fErchOhIck@4521!'
+                };
+                addLog(`Request body: ${JSON.stringify(requestBody)}`);
+
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                addLog(`Response status: ${response.status} ${response.statusText}`);
+                const data = await response.json();
+                addLog(`Response data: ${JSON.stringify(data).substring(0, 200)}`);
+
+                if (response.ok) {
+                    addLog(`✅ Login successful! Token: ${data.token.substring(0, 50)}...`, 'success');
+                    addLog(`User: ${data.user.name} (${data.user.email})`, 'success');
+                } else {
+                    addLog(`❌ Login failed (${response.status}): ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Login error: ${error.message}`, 'error');
+                addLog(`Error type: ${error.name}`, 'error');
+                if (error.stack) addLog(`Stack: ${error.stack.substring(0, 200)}`, 'error');
+            }
+        });
+
+        addLog('All event listeners attached');
+        addLog('Click buttons above to run tests');
+    </script>
+</body>
+</html>

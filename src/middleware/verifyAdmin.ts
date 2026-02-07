@@ -16,12 +16,20 @@ export function verifyAdmin(req: Request, res: Response, next: NextFunction): vo
       return;
     }
 
+    // Check if user has isAdmin flag (set by admin JWT authentication)
+    if (user.isAdmin === true) {
+      logger.debug({ userId: user.userId, email: user.email }, 'Admin access granted via admin JWT');
+      next();
+      return;
+    }
+
+    // Fallback: Check against ADMIN_USER_IDS for Clerk/Convex users
     const { userId } = user;
     const adminUserIds = config.admin.userIds;
 
     if (!adminUserIds || adminUserIds.length === 0) {
-      logger.error('ADMIN_USER_IDS not configured in environment');
-      res.status(500).json({ error: 'Admin authorization not configured' });
+      logger.warn({ userId }, 'Admin access denied: Not an admin user and ADMIN_USER_IDS not configured');
+      res.status(403).json({ error: 'Forbidden: Admin access required' });
       return;
     }
 
@@ -31,7 +39,7 @@ export function verifyAdmin(req: Request, res: Response, next: NextFunction): vo
       return;
     }
 
-    logger.debug({ userId }, 'Admin access granted');
+    logger.debug({ userId }, 'Admin access granted via ADMIN_USER_IDS');
     next();
   } catch (error) {
     logger.error({ error }, 'Error in admin verification');

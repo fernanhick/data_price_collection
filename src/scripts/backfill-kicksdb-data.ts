@@ -90,7 +90,7 @@ async function fetchProductDetails(slug: string): Promise<any> {
       return null;
     }
 
-    const result = await response.json();
+    const result = await response.json() as any;
     return result.data || null;
 
   } catch (error) {

@@ -28,7 +28,10 @@
       "Bash(npm run scraper:test-stylecode:*)",
       "Bash(npm run dev:generate-jwt:*)",
       "Bash(npm run db:migrate:*)",
-      "WebFetch(domain:api.kicks.dev)"
+      "WebFetch(domain:api.kicks.dev)",
+      "Bash(sudo tee:*)",
+      "Bash(sudo apt update:*)",
+      "Bash(sudo apt install:*)"
     ]
   }
 }

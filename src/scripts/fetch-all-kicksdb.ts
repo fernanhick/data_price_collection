@@ -119,7 +119,6 @@ async function fetchAll(options: FetchAllOptions = {}) {
     // Final statistics
     const endTime = Date.now();
     const durationSeconds = Math.floor((endTime - startTime) / 1000);
-    const durationMinutes = Math.floor(durationSeconds / 60);
 
     // Get final catalog size
     const catalogSize = await query('SELECT COUNT(*) as total FROM skus');

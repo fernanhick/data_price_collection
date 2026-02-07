@@ -1,3 +1,8 @@
+// Debug logging
+console.log('=== ADMIN APP.JS LOADING ===');
+console.log('Window location:', window.location.href);
+console.log('Document ready state:', document.readyState);
+
 // State
 let currentPage = 1;
 let totalPages = 1;
@@ -8,6 +13,9 @@ let deleteSkuId = null;
 // Constants
 const API_BASE = window.location.origin;
 const ITEMS_PER_PAGE = 20;
+
+console.log('API_BASE:', API_BASE);
+console.log('State initialized');
 
 // ======================
 // Token Management
@@ -100,6 +108,30 @@ async function loadSKUs(page = 1, filters = {}) {
     }
 }
 
+async function loadRecentSKUs() {
+    try {
+        const data = await apiRequest('GET', '/api/admin/activity/recent-skus?limit=10');
+
+        if (data) {
+            renderRecentSKUs(data.skus);
+        }
+    } catch (error) {
+        showError('Failed to load recent SKUs: ' + error.message);
+    }
+}
+
+async function loadRecentPrices() {
+    try {
+        const data = await apiRequest('GET', '/api/admin/activity/recent-prices?limit=10');
+
+        if (data) {
+            renderRecentPrices(data.prices);
+        }
+    } catch (error) {
+        showError('Failed to load recent prices: ' + error.message);
+    }
+}
+
 async function createSKU(skuData) {
     try {
         const data = await apiRequest('POST', '/api/admin/skus', skuData);
@@ -154,7 +186,7 @@ function renderSKUTable(skus) {
     tbody.innerHTML = skus.map(sku => `
         <tr>
             <td>${sku.id}</td>
-            <td>${escapeHtml(sku.sku_code)}</td>
+            <td>${escapeHtml(sku.style_code || sku.sku_code)}</td>
             <td>${escapeHtml(sku.brand)}</td>
             <td>${escapeHtml(sku.model)}</td>
             <td>${sku.colorway ? escapeHtml(sku.colorway) : '-'}</td>
@@ -164,7 +196,7 @@ function renderSKUTable(skus) {
             <td>${sku.retail_price ? '$' + sku.retail_price : '-'}</td>
             <td class="actions">
                 <button class="btn-sm btn-edit" onclick="showEditModal(${sku.id})">Edit</button>
-                <button class="btn-sm btn-delete" onclick="showDeleteConfirm(${sku.id}, '${escapeHtml(sku.sku_code)}')">Delete</button>
+                <button class="btn-sm btn-delete" onclick="showDeleteConfirm(${sku.id}, '${escapeHtml(sku.style_code || sku.sku_code)}')">Delete</button>
             </td>
         </tr>
     `).join('');
@@ -180,6 +212,58 @@ function updatePagination(data) {
     prevBtn.disabled = currentPage === 1;
     nextBtn.disabled = !data.has_more;
     pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+}
+
+function renderRecentSKUs(skus) {
+    const container = document.getElementById('recentSkusList');
+
+    if (!skus || skus.length === 0) {
+        container.innerHTML = '<div class="no-activity">No recent SKUs</div>';
+        return;
+    }
+
+    container.innerHTML = skus.map(sku => {
+        const timeAgo = formatTimeAgo(new Date(sku.created_at));
+        return `
+            <div class="activity-item">
+                <div class="activity-item-main">
+                    <span class="activity-sku-code">${escapeHtml(sku.sku_code)}</span>
+                    <span class="activity-brand">${escapeHtml(sku.brand)} ${escapeHtml(sku.model)}</span>
+                </div>
+                <div class="activity-item-meta">
+                    <span class="tier-badge tier-${sku.tier}">T${sku.tier}</span>
+                    ${sku.retail_price ? `<span class="activity-price">$${sku.retail_price}</span>` : ''}
+                    <span class="activity-time">${timeAgo}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderRecentPrices(prices) {
+    const container = document.getElementById('recentPricesList');
+
+    if (!prices || prices.length === 0) {
+        container.innerHTML = '<div class="no-activity">No recent prices</div>';
+        return;
+    }
+
+    container.innerHTML = prices.map(price => {
+        const timeAgo = formatTimeAgo(new Date(price.timestamp));
+        return `
+            <div class="activity-item">
+                <div class="activity-item-main">
+                    <span class="activity-sku-code">${escapeHtml(price.sku_code)}</span>
+                    <span class="activity-brand">${escapeHtml(price.brand)} ${escapeHtml(price.model)}</span>
+                </div>
+                <div class="activity-item-meta">
+                    <span class="activity-source">${escapeHtml(price.source)}</span>
+                    <span class="activity-price">$${price.price}</span>
+                    <span class="activity-time">${timeAgo}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // ======================
@@ -201,9 +285,9 @@ async function showEditModal(id) {
         const sku = await apiRequest('GET', `/api/skus/${id}`);
 
         if (sku) {
-            // Populate form
+            // Populate form (brand_style_code is primary, API returns style_code)
+            document.getElementById('brandStyleCode').value = sku.style_code || '';
             document.getElementById('skuCode').value = sku.sku_code || '';
-            document.getElementById('brandStyleCode').value = sku.brand_style_code || '';
             document.getElementById('brand').value = sku.brand || '';
             document.getElementById('model').value = sku.model || '';
             document.getElementById('colorway').value = sku.colorway || '';
@@ -245,9 +329,12 @@ function closeDeleteModal() {
 // ======================
 
 function collectFormData() {
+    const brandStyleCode = document.getElementById('brandStyleCode').value.trim();
+    const skuCode = document.getElementById('skuCode').value.trim();
+
     const formData = {
-        sku_code: document.getElementById('skuCode').value.trim(),
-        brand_style_code: document.getElementById('brandStyleCode').value.trim(),
+        brand_style_code: brandStyleCode,  // Primary identifier (required)
+        sku_code: skuCode || brandStyleCode,  // Auto-generate from brand_style_code if empty
         brand: document.getElementById('brand').value.trim(),
         model: document.getElementById('model').value.trim(),
         tier: parseInt(document.getElementById('tier').value),
@@ -282,27 +369,70 @@ function collectFormData() {
 // Event Handlers
 // ======================
 
-document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const token = document.getElementById('tokenInput').value.trim();
+console.log('=== ATTACHING EVENT HANDLERS ===');
+const loginForm = document.getElementById('loginForm');
+console.log('Login form element:', loginForm);
 
-    if (!token) {
-        showError('Please enter a token');
+if (loginForm) {
+    console.log('Attaching login form submit handler');
+    loginForm.addEventListener('submit', async (e) => {
+        console.log('LOGIN FORM SUBMITTED!');
+        e.preventDefault();
+
+    const email = document.getElementById('emailInput').value.trim();
+    const password = document.getElementById('passwordInput').value;
+    const errorDiv = document.getElementById('loginError');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    if (!email || !password) {
+        errorDiv.textContent = 'Please enter email and password';
+        errorDiv.style.display = 'block';
         return;
     }
 
-    setToken(token);
+    // Disable submit button during login
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Logging in...';
+    errorDiv.style.display = 'none';
 
-    // Try to load SKUs to verify token
     try {
+        // Call login endpoint
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
+        }
+
+        // Store token
+        setToken(data.token);
+
+        // Load dashboard
         await loadSKUs(1);
+        loadRecentSKUs();
+        loadRecentPrices();
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
+        showSuccess(`Welcome, ${data.user.name || data.user.email}!`);
     } catch (error) {
         clearToken();
-        showError('Invalid token. Please check and try again.');
+        errorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+        errorDiv.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Login';
     }
-});
+    });
+} else {
+    console.error('ERROR: Login form element not found!');
+}
 
 document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
@@ -366,6 +496,17 @@ document.getElementById('nextBtn')?.addEventListener('click', () => {
     loadSKUs(currentPage + 1, currentFilters);
 });
 
+// Activity refresh buttons
+document.getElementById('refreshSkusBtn')?.addEventListener('click', () => {
+    loadRecentSKUs();
+    showSuccess('SKU activity refreshed');
+});
+
+document.getElementById('refreshPricesBtn')?.addEventListener('click', () => {
+    loadRecentPrices();
+    showSuccess('Price activity refreshed');
+});
+
 // ======================
 // Utility Functions
 // ======================
@@ -374,7 +515,10 @@ function logout() {
     clearToken();
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
-    document.getElementById('tokenInput').value = '';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('passwordInput').value = '';
+    const errorDiv = document.getElementById('loginError');
+    if (errorDiv) errorDiv.style.display = 'none';
 }
 
 function showError(message) {
@@ -417,6 +561,17 @@ function debounce(func, wait) {
     };
 }
 
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    if (seconds < 604800) return Math.floor(seconds / 86400) + 'd ago';
+
+    return date.toLocaleDateString();
+}
+
 // ======================
 // Initialization
 // ======================
@@ -426,8 +581,13 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         loadSKUs(1);
+        loadRecentSKUs();
+        loadRecentPrices();
     } else {
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('dashboard').style.display = 'none';
     }
 });
+
+// Script loaded completely
+console.log('=== APP.JS LOADED COMPLETELY ===');

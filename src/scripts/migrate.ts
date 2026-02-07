@@ -1,6 +1,6 @@
-import { query, closePool } from '../db/index.ts';
-import { schema } from '../db/schema.ts';
-import logger from '../utils/logger.ts';
+import { query, closePool } from '../db/index.js';
+import { schema } from '../db/schema.js';
+import logger from '../utils/logger.js';
 
 async function migrate() {
   try {

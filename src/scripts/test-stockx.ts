@@ -1,5 +1,5 @@
-import { StockxScraper } from '../services/scrapers/stockx.ts';
-import logger from '../utils/logger.ts';
+import { StockxScraper } from '../services/scrapers/stockx.js';
+import logger from '../utils/logger.js';
 
 async function testStockX() {
   const scraper = new StockxScraper();

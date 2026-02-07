@@ -6,7 +6,7 @@ import { JWTPayload } from '../types/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Cache for Convex public key
+// Cache for JWT public key (supports Clerk, Convex, and other JWKS providers)
 let cachedPublicKey: string | null = null;
 let cacheTime: number = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -35,7 +35,7 @@ function getDevPublicKey(): string {
   return fs.readFileSync(DEV_PUBLIC_KEY_PATH, 'utf8');
 }
 
-// Fetch and cache Convex public key
+// Fetch and cache JWT public key from JWKS endpoint (Clerk, Convex, etc.)
 async function getConvexPublicKey(): Promise<string> {
   // In development mode, use local keys
   if (isDevelopment) {
@@ -81,7 +81,7 @@ async function getConvexPublicKey(): Promise<string> {
   }
 }
 
-// Middleware to verify JWT
+// Middleware to verify JWT (supports both Admin and Clerk tokens)
 export async function verifyConvexJWT(
   req: Request,
   res: Response,
@@ -97,11 +97,36 @@ export async function verifyConvexJWT(
 
     const token = authHeader.substring(7);
 
-    // Get Convex public key
+    // Decode token without verification to check type
+    const decoded = jwt.decode(token) as any;
+
+    if (!decoded) {
+      throw new Error('Invalid token format');
+    }
+
+    // Check if it's an admin token (signed with ADMIN_JWT_SECRET)
+    if (decoded.type === 'admin') {
+      // Verify admin token with ADMIN_JWT_SECRET
+      const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'your-secret-key-change-in-production';
+      const verified = jwt.verify(token, ADMIN_JWT_SECRET) as any;
+
+      // Attach user info to request
+      (req as any).user = {
+        userId: verified.sub,
+        email: verified.email,
+        name: verified.name,
+        isAdmin: true,
+      };
+
+      logger.debug(`Admin JWT verified for user: ${verified.email}`);
+      next();
+      return;
+    }
+
+    // Otherwise, it's a Clerk token - verify with Clerk JWKS
     const publicKey = await getConvexPublicKey();
 
     // Verify token signature
-    // In development, skip issuer check for local tokens
     const verifyOptions: jwt.VerifyOptions = {
       algorithms: ['RS256'],
     };
@@ -110,15 +135,15 @@ export async function verifyConvexJWT(
       verifyOptions.issuer = config.convex.url;
     }
 
-    const decoded = jwt.verify(token, publicKey, verifyOptions) as JWTPayload;
+    const verifiedClerk = jwt.verify(token, publicKey, verifyOptions) as JWTPayload;
 
     // Attach user info to request
     (req as any).user = {
-      userId: decoded.sub,
-      tokenId: decoded.tokenId,
+      userId: verifiedClerk.sub,
+      tokenId: verifiedClerk.tokenId,
     };
 
-    logger.debug(`JWT verified for user: ${decoded.sub}`);
+    logger.debug(`Clerk JWT verified for user: ${verifiedClerk.sub}`);
     next();
   } catch (error) {
     logger.warn({ error }, 'JWT verification failed');

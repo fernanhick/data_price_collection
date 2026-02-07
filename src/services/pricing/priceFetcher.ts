@@ -7,7 +7,6 @@ import { PriceSource, SKU } from '../../types/index.js';
 
 // Recommended delays between requests (in milliseconds)
 const STOCKX_DELAY_MS = 10000; // 10 seconds between StockX requests to avoid Cloudflare blocks
-const DEFAULT_DELAY_MS = 2000; // 2 seconds between other requests
 
 /**
  * Fetch and store prices for sneakers

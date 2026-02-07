@@ -4,8 +4,8 @@ import { z } from 'zod';
  * Zod schema for creating a new SKU
  */
 export const CreateSKUSchema = z.object({
-  sku_code: z.string().min(1, 'SKU code is required').max(100),
-  brand_style_code: z.string().min(1, 'Brand style code is required').max(50),
+  sku_code: z.string().min(1).max(100).optional(),  // Now optional
+  brand_style_code: z.string().min(1, 'Style code is required').max(50),  // Required
   brand: z.string().min(1, 'Brand is required').max(100),
   model: z.string().min(1, 'Model is required').max(100),
   colorway: z.string().max(255).optional(),

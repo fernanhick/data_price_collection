@@ -465,6 +465,145 @@ input, select, textarea {
 }
 
 /* ======================
+   Activity Section
+   ====================== */
+
+.activity-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    margin-bottom: 30px;
+}
+
+.activity-section h2 {
+    color: #2c3e50;
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.activity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px;
+}
+
+.activity-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.activity-header h3 {
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn-refresh {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    padding: 4px 8px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.btn-refresh:hover {
+    opacity: 1;
+    transform: rotate(90deg);
+}
+
+.activity-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.activity-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-item:hover {
+    background: #f8f9fa;
+}
+
+.activity-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.activity-sku-code {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.activity-brand {
+    color: #7f8c8d;
+    font-size: 13px;
+}
+
+.activity-item-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.activity-source {
+    background: #e8f4f8;
+    color: #0277bd;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.activity-price {
+    color: #27ae60;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.activity-time {
+    color: #95a5a6;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.loading-small {
+    text-align: center;
+    color: #7f8c8d;
+    padding: 40px 20px;
+}
+
+.no-activity {
+    text-align: center;
+    color: #95a5a6;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+/* ======================
    Responsive Design
    ====================== */
 
@@ -505,5 +644,13 @@ input, select, textarea {
     .modal-content {
         width: 95%;
         max-height: 95vh;
+    }
+
+    .activity-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .activity-item-meta {
+        font-size: 12px;
     }
 }

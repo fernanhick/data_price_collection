@@ -18,18 +18,21 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
     // Validate request body with Zod
     const validatedData = CreateSKUSchema.parse(req.body);
 
-    logger.info({ userId, sku_code: validatedData.sku_code }, 'Creating new SKU');
+    logger.info({ userId, style_code: validatedData.brand_style_code }, 'Creating new SKU');
 
-    // Check if SKU code already exists
+    // Check if style code already exists
     const existingResult = await dbQuery<SKU>(
-      'SELECT id FROM skus WHERE sku_code = $1',
-      [validatedData.sku_code],
+      'SELECT id FROM skus WHERE brand_style_code = $1',
+      [validatedData.brand_style_code],
     );
 
     if (existingResult.rows.length > 0) {
-      res.status(400).json({ error: 'SKU code already exists' });
+      res.status(400).json({ error: 'Style code already exists' });
       return;
     }
+
+    // Auto-generate sku_code from brand_style_code if not provided
+    const sku_code = validatedData.sku_code || validatedData.brand_style_code;
 
     // Insert new SKU
     const result = await dbQuery<SKU>(
@@ -40,7 +43,7 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
-        validatedData.sku_code,
+        sku_code,
         validatedData.brand_style_code,
         validatedData.brand,
         validatedData.model,
@@ -57,7 +60,7 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
 
     const createdSKU = result.rows[0];
 
-    logger.info({ userId, skuId: createdSKU.id, sku_code: createdSKU.sku_code }, 'SKU created successfully');
+    logger.info({ userId, skuId: createdSKU.id, style_code: createdSKU.brand_style_code }, 'SKU created successfully');
 
     res.status(201).json(createdSKU);
   } catch (error) {
@@ -173,28 +176,92 @@ router.delete('/skus/:id', async (req: Request, res: Response): Promise<void> =>
     logger.info({ userId, skuId }, 'Deleting SKU');
 
     // Check if SKU exists
-    const existingResult = await dbQuery<SKU>('SELECT sku_code FROM skus WHERE id = $1', [skuId]);
+    const existingResult = await dbQuery<SKU>('SELECT brand_style_code FROM skus WHERE id = $1', [skuId]);
 
     if (existingResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
       return;
     }
 
-    const sku_code = existingResult.rows[0].sku_code;
+    const style_code = existingResult.rows[0].brand_style_code;
 
     // Delete SKU (CASCADE will handle related records)
     await dbQuery('DELETE FROM skus WHERE id = $1', [skuId]);
 
-    logger.info({ userId, skuId, sku_code }, 'SKU deleted successfully');
+    logger.info({ userId, skuId, style_code }, 'SKU deleted successfully');
 
     res.status(200).json({
       success: true,
       message: 'SKU deleted successfully',
       id: skuId,
-      sku_code,
+      style_code,
     });
   } catch (error) {
     logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Failed to delete SKU');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/activity/recent-skus
+ * Get recently added SKUs
+ */
+router.get('/activity/recent-skus', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const result = await dbQuery<SKU & { created_at: string }>(
+      `SELECT id, sku_code, brand_style_code, brand, model, colorway, tier, retail_price, created_at
+       FROM skus
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit],
+    );
+
+    res.status(200).json({
+      skus: result.rows,
+      count: result.rows.length,
+    });
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Failed to fetch recent SKUs');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/activity/recent-prices
+ * Get recently added price points
+ */
+router.get('/activity/recent-prices', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const result = await dbQuery<{
+      id: number;
+      sku_id: number;
+      source: string;
+      price: number;
+      timestamp: string;
+      sku_code: string;
+      brand_style_code: string;
+      brand: string;
+      model: string;
+    }>(
+      `SELECT p.id, p.sku_id, p.source, p.price, p.timestamp,
+              s.sku_code, s.brand_style_code, s.brand, s.model
+       FROM prices p
+       JOIN skus s ON p.sku_id = s.id
+       ORDER BY p.timestamp DESC
+       LIMIT $1`,
+      [limit],
+    );
+
+    res.status(200).json({
+      prices: result.rows,
+      count: result.rows.length,
+    });
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Failed to fetch recent prices');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

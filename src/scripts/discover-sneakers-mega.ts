@@ -222,8 +222,9 @@ async function discoverSneakersMega() {
 
         // Show progress every 10 queries
         if ((i + 1) % 10 === 0) {
-          const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-          const eta = (elapsed / (i + 1)) * (megaSearchQueries.length - i - 1);
+          const elapsedMinutes = (Date.now() - startTime) / 1000 / 60;
+          const elapsed = elapsedMinutes.toFixed(1);
+          const eta = (elapsedMinutes / (i + 1)) * (megaSearchQueries.length - i - 1);
           logger.info('');
           logger.info(`📈 Progress: ${i + 1}/${megaSearchQueries.length} (${((i + 1) / megaSearchQueries.length * 100).toFixed(0)}%)`);
           logger.info(`⏱️  Elapsed: ${elapsed}m | ETA: ${eta.toFixed(1)}m`);
@@ -271,7 +272,7 @@ async function discoverSneakersMega() {
           `INSERT INTO skus (
             sku_code, brand_style_code, brand, model, colorway, tier, retail_price
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (sku_code) DO NOTHING
+          ON CONFLICT (brand_style_code) DO NOTHING
           RETURNING id`,
           [
             sneaker.sku_code,

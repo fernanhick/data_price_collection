@@ -22,8 +22,8 @@ export enum ConfidenceLevel {
 // Database Models
 export interface SKU {
   id: number;
-  sku_code: string;
-  brand_style_code?: string;
+  sku_code?: string;  // Now optional
+  brand_style_code: string;  // Required - primary identifier
   brand: string;
   model: string;
   colorway: string;
@@ -86,8 +86,8 @@ export interface JWTPayload {
 
 // API Request/Response Types
 export interface PriceResponse {
-  sku_code: string;
-  style_code?: string;
+  sku_code?: string;  // Deprecated, optional for backward compatibility
+  style_code: string;  // Primary identifier
   ecmv: number;
   confidence: ConfidenceLevel;
   user_id?: string;

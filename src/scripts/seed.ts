@@ -164,8 +164,8 @@ async function seed() {
         `INSERT INTO skus (
           sku_code, brand_style_code, brand, model, colorway, tier, retail_price
         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (sku_code) DO UPDATE SET
-          brand_style_code = EXCLUDED.brand_style_code,
+        ON CONFLICT (brand_style_code) DO UPDATE SET
+          sku_code = EXCLUDED.sku_code,
           brand = EXCLUDED.brand,
           model = EXCLUDED.model,
           colorway = EXCLUDED.colorway,

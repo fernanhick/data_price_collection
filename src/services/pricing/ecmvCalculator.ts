@@ -25,7 +25,7 @@ export class ECMVCalculator {
       const prices = await this.getPricesForSku(sku.id, 24);
 
       if (prices.length === 0) {
-        logger.warn({ skuCode: sku.sku_code }, 'No prices found for ECMV calculation');
+        logger.warn({ styleCode: sku.brand_style_code }, 'No prices found for ECMV calculation');
         return null;
       }
 
@@ -45,7 +45,7 @@ export class ECMVCalculator {
 
       logger.debug(
         {
-          skuCode: sku.sku_code,
+          styleCode: sku.brand_style_code,
           eBayPrice,
           goatPrice,
           stockxPrice,
@@ -67,7 +67,7 @@ export class ECMVCalculator {
         },
       };
     } catch (error) {
-      logger.error({ skuCode: sku.sku_code, error }, 'Failed to calculate ECMV');
+      logger.error({ styleCode: sku.brand_style_code, error }, 'Failed to calculate ECMV');
       return null;
     }
   }
