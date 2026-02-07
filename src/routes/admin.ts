@@ -62,7 +62,12 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ userId, skuId: createdSKU.id, style_code: createdSKU.brand_style_code }, 'SKU created successfully');
 
-    res.status(201).json(createdSKU);
+    // Map brand_style_code to style_code for API response
+    res.status(201).json({
+      ...createdSKU,
+      style_code: createdSKU.brand_style_code,
+      brand_style_code: undefined,
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       logger.warn({ error: error.errors }, 'Validation error creating SKU');
@@ -141,7 +146,12 @@ router.put('/skus/:id', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ userId, skuId, updatedFields: Object.keys(validatedData) }, 'SKU updated successfully');
 
-    res.status(200).json(updatedSKU);
+    // Map brand_style_code to style_code for API response
+    res.status(200).json({
+      ...updatedSKU,
+      style_code: updatedSKU.brand_style_code,
+      brand_style_code: undefined,
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       logger.warn({ error: error.errors }, 'Validation error updating SKU');
@@ -218,8 +228,13 @@ router.get('/activity/recent-skus', async (req: Request, res: Response): Promise
       [limit],
     );
 
+    // Map brand_style_code to style_code for API response
     res.status(200).json({
-      skus: result.rows,
+      skus: result.rows.map(sku => ({
+        ...sku,
+        style_code: sku.brand_style_code,
+        brand_style_code: undefined,
+      })),
       count: result.rows.length,
     });
   } catch (error) {
@@ -256,8 +271,19 @@ router.get('/activity/recent-prices', async (req: Request, res: Response): Promi
       [limit],
     );
 
+    // Map brand_style_code to style_code for API response
     res.status(200).json({
-      prices: result.rows,
+      prices: result.rows.map(row => ({
+        id: row.id,
+        sku_id: row.sku_id,
+        source: row.source,
+        price: row.price,
+        timestamp: row.timestamp,
+        sku_code: row.sku_code,
+        style_code: row.brand_style_code,
+        brand: row.brand,
+        model: row.model,
+      })),
       count: result.rows.length,
     });
   } catch (error) {
