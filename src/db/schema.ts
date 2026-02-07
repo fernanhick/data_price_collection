@@ -3,7 +3,7 @@ export const schema = `
 CREATE TABLE IF NOT EXISTS skus (
   id SERIAL PRIMARY KEY,
   sku_code VARCHAR(255),  -- Optional, for backward compatibility
-  brand_style_code VARCHAR(255) UNIQUE NOT NULL,  -- Primary identifier
+  style_code VARCHAR(255) UNIQUE NOT NULL,  -- Primary identifier
   brand VARCHAR(100) NOT NULL,
   model VARCHAR(100) NOT NULL,
   colorway VARCHAR(255),
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS skus (
 
 CREATE INDEX IF NOT EXISTS idx_skus_tier ON skus(tier);
 CREATE INDEX IF NOT EXISTS idx_skus_brand ON skus(brand);
-CREATE INDEX IF NOT EXISTS idx_skus_brand_style_code ON skus(brand_style_code);
+CREATE INDEX IF NOT EXISTS idx_skus_style_code ON skus(style_code);
 CREATE INDEX IF NOT EXISTS idx_skus_sku_code ON skus(sku_code);
 
 -- Individual Price Points from Sources

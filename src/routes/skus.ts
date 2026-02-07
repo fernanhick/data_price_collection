@@ -110,7 +110,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       skus: skuResult.rows.map((sku) => ({
         id: sku.id,
         sku_code: sku.sku_code,
-        style_code: sku.brand_style_code,
+        style_code: sku.style_code,
         brand: sku.brand,
         model: sku.model,
         colorway: sku.colorway,
@@ -151,14 +151,14 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
         brand ILIKE $2 OR
         model ILIKE $3 OR
         colorway ILIKE $4 OR
-        brand_style_code ILIKE $5
+        style_code ILIKE $5
       )`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     // Get catalog with minimal fields
     const result = await dbQuery<SKU>(
-      `SELECT id, sku_code, brand_style_code, brand, model, colorway, retail_price, tier
+      `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier
        FROM skus ${whereClause}
        ORDER BY tier ASC, brand ASC, model ASC
        LIMIT $${params.length + 1}`,
@@ -184,7 +184,7 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
         brand: sku.brand,
         model: sku.model,
         colorway: sku.colorway,
-        style_code: sku.brand_style_code,
+        style_code: sku.style_code,
         retail_price: sku.retail_price,
         tier: sku.tier,
         display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
@@ -213,12 +213,12 @@ router.get('/trending/popular', async (req: Request, res: Response): Promise<voi
 
     // Get SKUs with most price data
     const result = await dbQuery(
-      `SELECT s.id, s.sku_code, s.brand_style_code, s.brand, s.model, s.colorway, s.tier,
+      `SELECT s.id, s.sku_code, s.style_code, s.brand, s.model, s.colorway, s.tier,
               COUNT(p.id) as price_count,
               AVG(p.price) as avg_price
        FROM skus s
        LEFT JOIN prices p ON s.id = p.sku_id
-       GROUP BY s.id, s.sku_code, s.brand_style_code, s.brand, s.model, s.colorway, s.tier
+       GROUP BY s.id, s.sku_code, s.style_code, s.brand, s.model, s.colorway, s.tier
        ORDER BY price_count DESC, s.tier ASC
        LIMIT $1`,
       [limitNum],
@@ -240,7 +240,7 @@ router.get('/trending/popular', async (req: Request, res: Response): Promise<voi
       trending: result.rows.map((row: any) => ({
         id: row.id,
         sku_code: row.sku_code,
-        style_code: row.brand_style_code,
+        style_code: row.style_code,
         brand: row.brand,
         model: row.model,
         colorway: row.colorway,
@@ -311,7 +311,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     res.json({
       id: sku.id,
       sku_code: sku.sku_code,
-      style_code: sku.brand_style_code,  // Changed from brand_style_code for consistency
+      style_code: sku.style_code,  // Changed from style_code for consistency
       brand: sku.brand,
       model: sku.model,
       colorway: sku.colorway,

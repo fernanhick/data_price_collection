@@ -24,7 +24,7 @@ router.get('/:style_code', async (req: Request, res: Response): Promise<void> =>
     logger.info({ style_code, userId }, 'Fetching price');
 
     // Get SKU from database
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE brand_style_code = $1', [style_code]);
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE style_code = $1', [style_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -78,7 +78,7 @@ router.get('/:style_code', async (req: Request, res: Response): Promise<void> =>
     // Format response
     const response: PriceResponse = {
       sku_code: sku.sku_code,  // Deprecated but included for backward compatibility
-      style_code: sku.brand_style_code,
+      style_code: sku.style_code,
       ecmv: priceData.ecmv,
       confidence: priceData.confidence,
       user_id: userId,
@@ -118,7 +118,7 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
     logger.info({ style_code, days: daysNum, userId }, 'Fetching price history');
 
     // Get SKU
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE brand_style_code = $1', [style_code]);
+    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE style_code = $1', [style_code]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -165,7 +165,7 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
 
     res.json({
       sku_code: sku.sku_code,  // Deprecated but included
-      style_code: sku.brand_style_code,
+      style_code: sku.style_code,
       days: daysNum,
       data_points: historyResult.rows.length,
       stats,

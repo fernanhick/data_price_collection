@@ -24,7 +24,7 @@ async function testECMV() {
     logger.info({
       id: sku.id,
       sku_code: sku.sku_code,
-      style_code: sku.brand_style_code,
+      style_code: sku.style_code,
       brand: sku.brand,
       model: sku.model
     }, 'Testing ECMV calculation with new structure');
@@ -34,7 +34,7 @@ async function testECMV() {
 
     if (ecmvResult) {
       logger.info({
-        style_code: sku.brand_style_code,
+        style_code: sku.style_code,
         ecmv: ecmvResult.ecmv,
         confidence: ecmvResult.confidence,
         components: ecmvResult.components

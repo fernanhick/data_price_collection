@@ -282,7 +282,7 @@ function mapProductToSKU(product: KicksDBProduct) {
 
   return {
     sku_code: styleCode,
-    brand_style_code: styleCode,
+    style_code: styleCode,
     brand: brand || 'Unknown',
     model: model || 'Unknown Model',
     colorway: colorway,
@@ -304,14 +304,14 @@ async function insertSneaker(sku: ReturnType<typeof mapProductToSKU>): Promise<b
   try {
     await query(
       `INSERT INTO skus (
-        sku_code, brand_style_code, brand, model, colorway,
+        sku_code, style_code, brand, model, colorway,
         release_date, retail_price, category, tier,
         stockx_id, goat_id, ebay_query
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (brand_style_code) DO NOTHING`,
+      ON CONFLICT (style_code) DO NOTHING`,
       [
         sku.sku_code,
-        sku.brand_style_code,
+        sku.style_code,
         sku.brand,
         sku.model,
         sku.colorway,

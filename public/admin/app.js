@@ -285,7 +285,7 @@ async function showEditModal(id) {
         const sku = await apiRequest('GET', `/api/skus/${id}`);
 
         if (sku) {
-            // Populate form (brand_style_code is primary, API returns style_code)
+            // Populate form with style_code
             document.getElementById('brandStyleCode').value = sku.style_code || '';
             document.getElementById('skuCode').value = sku.sku_code || '';
             document.getElementById('brand').value = sku.brand || '';
@@ -333,8 +333,8 @@ function collectFormData() {
     const skuCode = document.getElementById('skuCode').value.trim();
 
     const formData = {
-        brand_style_code: brandStyleCode,  // Primary identifier (required)
-        sku_code: skuCode || brandStyleCode,  // Auto-generate from brand_style_code if empty
+        style_code: brandStyleCode,  // Primary identifier (required)
+        sku_code: skuCode || brandStyleCode,  // Auto-generate from style_code if empty
         brand: document.getElementById('brand').value.trim(),
         model: document.getElementById('model').value.trim(),
         tier: parseInt(document.getElementById('tier').value),

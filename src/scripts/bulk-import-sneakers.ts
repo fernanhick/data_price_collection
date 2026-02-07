@@ -123,19 +123,19 @@ async function bulkImport() {
     let skipped = 0;
 
     for (const sneaker of popularSneakers) {
-      // Set brand_style_code same as sku_code for now
-      const brand_style_code = sneaker.sku_code;
+      // Set style_code same as sku_code for now
+      const style_code = sneaker.sku_code;
 
       try {
         const result = await query(
           `INSERT INTO skus (
-            sku_code, brand_style_code, brand, model, colorway, tier, retail_price
+            sku_code, style_code, brand, model, colorway, tier, retail_price
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (brand_style_code) DO NOTHING
+          ON CONFLICT (style_code) DO NOTHING
           RETURNING id`,
           [
             sneaker.sku_code,
-            brand_style_code,
+            style_code,
             sneaker.brand,
             sneaker.model,
             sneaker.colorway,

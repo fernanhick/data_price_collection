@@ -84,6 +84,7 @@ router.get('/analytics', async (req: Request, res: Response) => {
     const recentResult = await query(`
       SELECT
         sku_code,
+        style_code,
         brand,
         model,
         colorway,
@@ -151,6 +152,7 @@ router.get('/analytics', async (req: Request, res: Response) => {
       })),
       recentlyAdded: recentResult.rows.map(row => ({
         sku_code: row.sku_code,
+        style_code: row.style_code,
         brand: row.brand,
         model: row.model,
         colorway: row.colorway,

@@ -18,12 +18,12 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
     // Validate request body with Zod
     const validatedData = CreateSKUSchema.parse(req.body);
 
-    logger.info({ userId, style_code: validatedData.brand_style_code }, 'Creating new SKU');
+    logger.info({ userId, style_code: validatedData.style_code }, 'Creating new SKU');
 
     // Check if style code already exists
     const existingResult = await dbQuery<SKU>(
-      'SELECT id FROM skus WHERE brand_style_code = $1',
-      [validatedData.brand_style_code],
+      'SELECT id FROM skus WHERE style_code = $1',
+      [validatedData.style_code],
     );
 
     if (existingResult.rows.length > 0) {
@@ -31,20 +31,20 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Auto-generate sku_code from brand_style_code if not provided
-    const sku_code = validatedData.sku_code || validatedData.brand_style_code;
+    // Auto-generate sku_code from style_code if not provided
+    const sku_code = validatedData.sku_code || validatedData.style_code;
 
     // Insert new SKU
     const result = await dbQuery<SKU>(
       `INSERT INTO skus (
-        sku_code, brand_style_code, brand, model, colorway,
+        sku_code, style_code, brand, model, colorway,
         release_date, retail_price, category, tier,
         stockx_id, goat_id, ebay_query
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         sku_code,
-        validatedData.brand_style_code,
+        validatedData.style_code,
         validatedData.brand,
         validatedData.model,
         validatedData.colorway || null,
@@ -60,14 +60,9 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
 
     const createdSKU = result.rows[0];
 
-    logger.info({ userId, skuId: createdSKU.id, style_code: createdSKU.brand_style_code }, 'SKU created successfully');
+    logger.info({ userId, skuId: createdSKU.id, style_code: createdSKU.style_code }, 'SKU created successfully');
 
-    // Map brand_style_code to style_code for API response
-    res.status(201).json({
-      ...createdSKU,
-      style_code: createdSKU.brand_style_code,
-      brand_style_code: undefined,
-    });
+    res.status(201).json(createdSKU);
   } catch (error) {
     if (error instanceof ZodError) {
       logger.warn({ error: error.errors }, 'Validation error creating SKU');
@@ -146,12 +141,7 @@ router.put('/skus/:id', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ userId, skuId, updatedFields: Object.keys(validatedData) }, 'SKU updated successfully');
 
-    // Map brand_style_code to style_code for API response
-    res.status(200).json({
-      ...updatedSKU,
-      style_code: updatedSKU.brand_style_code,
-      brand_style_code: undefined,
-    });
+    res.status(200).json(updatedSKU);
   } catch (error) {
     if (error instanceof ZodError) {
       logger.warn({ error: error.errors }, 'Validation error updating SKU');
@@ -186,14 +176,14 @@ router.delete('/skus/:id', async (req: Request, res: Response): Promise<void> =>
     logger.info({ userId, skuId }, 'Deleting SKU');
 
     // Check if SKU exists
-    const existingResult = await dbQuery<SKU>('SELECT brand_style_code FROM skus WHERE id = $1', [skuId]);
+    const existingResult = await dbQuery<SKU>('SELECT style_code FROM skus WHERE id = $1', [skuId]);
 
     if (existingResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
       return;
     }
 
-    const style_code = existingResult.rows[0].brand_style_code;
+    const style_code = existingResult.rows[0].style_code;
 
     // Delete SKU (CASCADE will handle related records)
     await dbQuery('DELETE FROM skus WHERE id = $1', [skuId]);
@@ -221,20 +211,15 @@ router.get('/activity/recent-skus', async (req: Request, res: Response): Promise
     const limit = parseInt(req.query.limit as string) || 10;
 
     const result = await dbQuery<SKU & { created_at: string }>(
-      `SELECT id, sku_code, brand_style_code, brand, model, colorway, tier, retail_price, created_at
+      `SELECT id, sku_code, style_code, brand, model, colorway, tier, retail_price, created_at
        FROM skus
        ORDER BY created_at DESC
        LIMIT $1`,
       [limit],
     );
 
-    // Map brand_style_code to style_code for API response
     res.status(200).json({
-      skus: result.rows.map(sku => ({
-        ...sku,
-        style_code: sku.brand_style_code,
-        brand_style_code: undefined,
-      })),
+      skus: result.rows,
       count: result.rows.length,
     });
   } catch (error) {
@@ -258,12 +243,12 @@ router.get('/activity/recent-prices', async (req: Request, res: Response): Promi
       price: number;
       timestamp: string;
       sku_code: string;
-      brand_style_code: string;
+      style_code: string;
       brand: string;
       model: string;
     }>(
       `SELECT p.id, p.sku_id, p.source, p.price, p.timestamp,
-              s.sku_code, s.brand_style_code, s.brand, s.model
+              s.sku_code, s.style_code, s.brand, s.model
        FROM prices p
        JOIN skus s ON p.sku_id = s.id
        ORDER BY p.timestamp DESC
@@ -271,19 +256,8 @@ router.get('/activity/recent-prices', async (req: Request, res: Response): Promi
       [limit],
     );
 
-    // Map brand_style_code to style_code for API response
     res.status(200).json({
-      prices: result.rows.map(row => ({
-        id: row.id,
-        sku_id: row.sku_id,
-        source: row.source,
-        price: row.price,
-        timestamp: row.timestamp,
-        sku_code: row.sku_code,
-        style_code: row.brand_style_code,
-        brand: row.brand,
-        model: row.model,
-      })),
+      prices: result.rows,
       count: result.rows.length,
     });
   } catch (error) {

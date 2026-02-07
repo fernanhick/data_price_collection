@@ -2,7 +2,10 @@ import pino from 'pino';
 import config from '../config/index.js';
 
 // Configure pino logger
-const logger = pino({
+// Handle both default and named exports
+const pinoInstance = (pino as any).default || pino;
+
+const logger = pinoInstance({
   level: config.logging.level,
   transport:
     config.nodeEnv === 'development'

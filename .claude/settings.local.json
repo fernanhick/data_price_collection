@@ -31,7 +31,8 @@
       "WebFetch(domain:api.kicks.dev)",
       "Bash(sudo tee:*)",
       "Bash(sudo apt update:*)",
-      "Bash(sudo apt install:*)"
+      "Bash(sudo apt install:*)",
+      "Bash(grep:*)"
     ]
   }
 }

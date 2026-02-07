@@ -5,7 +5,7 @@ import { z } from 'zod';
  */
 export const CreateSKUSchema = z.object({
   sku_code: z.string().min(1).max(100).optional(),  // Now optional
-  brand_style_code: z.string().min(1, 'Style code is required').max(50),  // Required
+  style_code: z.string().min(1, 'Style code is required').max(50),  // Required
   brand: z.string().min(1, 'Brand is required').max(100),
   model: z.string().min(1, 'Model is required').max(100),
   colorway: z.string().max(255).optional(),
@@ -24,7 +24,7 @@ export const CreateSKUSchema = z.object({
  */
 export const UpdateSKUSchema = z.object({
   sku_code: z.string().min(1).max(100).optional(),
-  brand_style_code: z.string().min(1).max(50).optional(),
+  style_code: z.string().min(1).max(50).optional(),
   brand: z.string().min(1).max(100).optional(),
   model: z.string().min(1).max(100).optional(),
   colorway: z.string().max(255).optional().nullable(),

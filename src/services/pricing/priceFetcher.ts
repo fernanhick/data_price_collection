@@ -30,7 +30,7 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number; listingCount?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching eBay prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching eBay prices');
 
       // eBay sellers use descriptive names more than style codes, so prefer custom query or built query
       // If custom query exists, use it. Otherwise build from brand + model + colorway (+ style code)
@@ -93,10 +93,10 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching GOAT prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching GOAT prices');
 
       // Prefer style code, then custom ID, then build from SKU data
-      const query = sku.brand_style_code || sku.goat_id || this.buildSearchQuery(sku);
+      const query = sku.style_code || sku.goat_id || this.buildSearchQuery(sku);
 
       // Search GOAT
       const listing = await this.goatScraper.getPriceForSku(query);
@@ -147,10 +147,10 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number }> {
     try {
-      logger.info({ skuCode: sku.sku_code, styleCode: sku.brand_style_code }, 'Fetching StockX prices');
+      logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching StockX prices');
 
       // Prefer style code, then custom ID, then build from SKU data
-      const query = sku.brand_style_code || sku.stockx_id || this.buildSearchQuery(sku);
+      const query = sku.style_code || sku.stockx_id || this.buildSearchQuery(sku);
 
       // Search StockX
       const listing = await this.stockxScraper.getPriceForSku(query);
@@ -300,8 +300,8 @@ export class PriceFetcher {
     }
 
     // Add style code for better matching on eBay
-    if (sku.brand_style_code) {
-      parts.push(sku.brand_style_code);
+    if (sku.style_code) {
+      parts.push(sku.style_code);
     }
 
     return parts.filter((p) => p).join(' ');

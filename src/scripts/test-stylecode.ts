@@ -24,7 +24,7 @@ async function testStyleCode() {
       logger.info(`\n--- Testing SKU: ${sku.sku_code} ---`);
       logger.info({
         sku_code: sku.sku_code,
-        brand_style_code: sku.brand_style_code,
+        style_code: sku.style_code,
         brand: sku.brand,
         model: sku.model,
         colorway: sku.colorway,

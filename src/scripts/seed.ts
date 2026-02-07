@@ -7,7 +7,7 @@ const initialSneakers = [
   // Jordan 1
   {
     sku_code: '555088-063',
-    brand_style_code: '555088-063',
+    style_code: '555088-063',
     brand: 'Nike',
     model: 'Air Jordan 1 Retro High OG',
     colorway: 'Bred Toe',
@@ -16,7 +16,7 @@ const initialSneakers = [
   },
   {
     sku_code: 'DZ5485-612',
-    brand_style_code: 'DZ5485-612',
+    style_code: 'DZ5485-612',
     brand: 'Nike',
     model: 'Air Jordan 1 Retro High OG',
     colorway: 'Lost and Found',
@@ -25,7 +25,7 @@ const initialSneakers = [
   },
   {
     sku_code: '555088-007',
-    brand_style_code: '555088-007',
+    style_code: '555088-007',
     brand: 'Nike',
     model: 'Air Jordan 1 Retro High OG',
     colorway: 'Royal',
@@ -36,7 +36,7 @@ const initialSneakers = [
   // Dunk Low
   {
     sku_code: 'DD1391-100',
-    brand_style_code: 'DD1391-100',
+    style_code: 'DD1391-100',
     brand: 'Nike',
     model: 'Dunk Low',
     colorway: 'Panda',
@@ -45,7 +45,7 @@ const initialSneakers = [
   },
   {
     sku_code: 'DV0833-300',
-    brand_style_code: 'DV0833-300',
+    style_code: 'DV0833-300',
     brand: 'Nike',
     model: 'Dunk Low',
     colorway: 'Vintage Green',
@@ -56,7 +56,7 @@ const initialSneakers = [
   // Yeezy
   {
     sku_code: 'BY1604',
-    brand_style_code: 'BY1604',
+    style_code: 'BY1604',
     brand: 'Adidas',
     model: 'Yeezy Boost 350 V2',
     colorway: 'Core Black White',
@@ -65,7 +65,7 @@ const initialSneakers = [
   },
   {
     sku_code: 'CP9654',
-    brand_style_code: 'CP9654',
+    style_code: 'CP9654',
     brand: 'Adidas',
     model: 'Yeezy Boost 350 V2',
     colorway: 'Zebra',
@@ -76,7 +76,7 @@ const initialSneakers = [
   // Travis Scott
   {
     sku_code: 'DM7866-162',
-    brand_style_code: 'DM7866-162',
+    style_code: 'DM7866-162',
     brand: 'Nike',
     model: 'Air Jordan 1 Low x Travis Scott',
     colorway: 'Reverse Mocha',
@@ -87,7 +87,7 @@ const initialSneakers = [
   // New Balance
   {
     sku_code: 'M990GL6',
-    brand_style_code: 'M990GL6',
+    style_code: 'M990GL6',
     brand: 'New Balance',
     model: '990v6',
     colorway: 'Grey',
@@ -96,7 +96,7 @@ const initialSneakers = [
   },
   {
     sku_code: 'BB550WT1',
-    brand_style_code: 'BB550WT1',
+    style_code: 'BB550WT1',
     brand: 'New Balance',
     model: '550',
     colorway: 'White Green',
@@ -107,7 +107,7 @@ const initialSneakers = [
   // Reebok
   {
     sku_code: 'FZ4387',
-    brand_style_code: 'FZ4387',
+    style_code: 'FZ4387',
     brand: 'Reebok',
     model: 'Question Mid',
     colorway: 'Black Chalk',
@@ -118,7 +118,7 @@ const initialSneakers = [
   // Tier 3 (Long tail)
   {
     sku_code: 'CN8490-100',
-    brand_style_code: 'CN8490-100',
+    style_code: 'CN8490-100',
     brand: 'Nike',
     model: 'Air Max 90',
     colorway: 'White Black',
@@ -127,7 +127,7 @@ const initialSneakers = [
   },
   {
     sku_code: 'FX5501',
-    brand_style_code: 'FX5501',
+    style_code: 'FX5501',
     brand: 'Adidas',
     model: 'Stan Smith',
     colorway: 'White Green',
@@ -136,7 +136,7 @@ const initialSneakers = [
   },
   {
     sku_code: '369449-01',
-    brand_style_code: '369449-01',
+    style_code: '369449-01',
     brand: 'Puma',
     model: 'RS-X',
     colorway: 'Black White',
@@ -162,9 +162,9 @@ async function seed() {
     for (const sneaker of initialSneakers) {
       const result = await query(
         `INSERT INTO skus (
-          sku_code, brand_style_code, brand, model, colorway, tier, retail_price
+          sku_code, style_code, brand, model, colorway, tier, retail_price
         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (brand_style_code) DO UPDATE SET
+        ON CONFLICT (style_code) DO UPDATE SET
           sku_code = EXCLUDED.sku_code,
           brand = EXCLUDED.brand,
           model = EXCLUDED.model,
@@ -174,7 +174,7 @@ async function seed() {
         RETURNING id`,
         [
           sneaker.sku_code,
-          sneaker.brand_style_code,
+          sneaker.style_code,
           sneaker.brand,
           sneaker.model,
           sneaker.colorway,

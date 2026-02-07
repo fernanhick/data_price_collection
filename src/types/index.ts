@@ -23,7 +23,7 @@ export enum ConfidenceLevel {
 export interface SKU {
   id: number;
   sku_code?: string;  // Now optional
-  brand_style_code: string;  // Required - primary identifier
+  style_code: string;  // Required - primary identifier
   brand: string;
   model: string;
   colorway: string;

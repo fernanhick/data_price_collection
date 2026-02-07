@@ -144,13 +144,13 @@ async function discoverSneakers() {
       try {
         const result = await query(
           `INSERT INTO skus (
-            sku_code, brand_style_code, brand, model, colorway, tier, retail_price
+            sku_code, style_code, brand, model, colorway, tier, retail_price
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (brand_style_code) DO NOTHING
+          ON CONFLICT (style_code) DO NOTHING
           RETURNING id`,
           [
             sneaker.sku_code,
-            sneaker.sku_code, // Use sku_code as brand_style_code
+            sneaker.sku_code, // Use sku_code as style_code
             sneaker.brand,
             sneaker.model,
             sneaker.colorway,
