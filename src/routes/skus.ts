@@ -81,7 +81,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     // Get paginated results
     const skuResult = await dbQuery<SKU>(
-      `SELECT id, sku_code, brand, model, colorway, retail_price, tier, created_at
+      `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier, created_at
        FROM skus ${whereClause}
        ORDER BY tier ASC, model ASC
        LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
