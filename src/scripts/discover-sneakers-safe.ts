@@ -122,6 +122,26 @@ async function discoverSneakersSafe() {
           goat_slug: listing.slug,
           image_url: listing.imageUrl,
         });
+
+        // Create entries for alternate style codes if present
+        const altStyleCodes = extractAlternateStyleCodes(normalizedSku);
+        for (const altCode of altStyleCodes) {
+          // Check if this alternate code doesn't already exist in discovered
+          const altDuplicate = discovered.find(d => d.sku_code === altCode);
+          if (!altDuplicate && !duplicates.has(altCode)) {
+            discovered.push({
+              sku_code: altCode,
+              brand: parsedSneaker.brand || listing.brand || 'Unknown',
+              model: parsedSneaker.model,
+              colorway: parsedSneaker.colorway || listing.colorway || '',
+              retail_price: listing.retailPriceCents ? listing.retailPriceCents / 100 : null,
+              tier,
+              goat_slug: listing.slug,
+              image_url: listing.imageUrl,
+            });
+            duplicates.add(altCode);
+          }
+        }
       }
 
       // Aggressive rate limiting: 3-6 seconds between searches
@@ -144,6 +164,9 @@ async function discoverSneakersSafe() {
 
     for (const sneaker of discovered) {
       try {
+        // Extract primary style code for database storage
+        const primaryStyleCode = extractPrimaryStyleCode(sneaker.sku_code);
+
         const result = await query(
           `INSERT INTO skus (
             sku_code, style_code, brand, model, colorway, tier, retail_price
@@ -152,7 +175,7 @@ async function discoverSneakersSafe() {
           RETURNING id`,
           [
             sneaker.sku_code,
-            sneaker.sku_code,
+            primaryStyleCode, // Use primary style code for uniqueness
             sneaker.brand,
             sneaker.model,
             sneaker.colorway,
@@ -188,6 +211,25 @@ async function discoverSneakersSafe() {
 async function getTotalCount(): Promise<number> {
   const result = await query('SELECT COUNT(*) as count FROM skus');
   return (result.rows[0] as any).count;
+}
+
+/**
+ * Extract primary style code from combined codes
+ * e.g., "HF2793-600 / HF2794-600" -> "HF2793-600"
+ */
+function extractPrimaryStyleCode(code: string): string {
+  // Split by / and take the first one
+  return code.split('/')[0].trim();
+}
+
+/**
+ * Extract alternate style codes from combined codes
+ * e.g., "HF2793-600 / HF2794-600" -> ["HF2794-600"]
+ */
+function extractAlternateStyleCodes(code: string): string[] {
+  const parts = code.split('/').map(p => p.trim());
+  // Return everything except the first code
+  return parts.length > 1 ? parts.slice(1) : [];
 }
 
 function parseSneakerName(name: string, brandHint?: string): {
