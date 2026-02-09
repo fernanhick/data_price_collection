@@ -32,6 +32,11 @@ const config: AppConfig = {
   scraper: {
     timeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS || '10000', 10),
     retryAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
+    ebay: {
+      conditionCodes: (process.env.EBAY_CONDITION_CODES || '1000,1500,3000,4000').split(',').map(c => c.trim()),
+      minConditionThreshold: parseInt(process.env.EBAY_MIN_CONDITION || '3000', 10),
+      enableOutlierFiltering: process.env.EBAY_OUTLIER_FILTERING === 'true',
+    },
   },
 
   api: {

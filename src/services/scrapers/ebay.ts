@@ -1,6 +1,7 @@
 import { load } from 'cheerio';
 import { fetchUrl } from '../../utils/http.js';
 import logger from '../../utils/logger.js';
+import config from '../../config/index.js';
 import { eBayListing } from '../../types/index.js';
 
 /**
@@ -8,9 +9,29 @@ import { eBayListing } from '../../types/index.js';
  *
  * Fetches sold listings from eBay's public search results.
  * Uses public URLs, no API access required.
+ *
+ * Supports condition filtering and outlier removal.
  */
 export class EbayScraper {
   private readonly baseUrl = 'https://www.ebay.com/sch/i.html';
+
+  /**
+   * Condition code mappings
+   */
+  private readonly conditionCodeMap: Record<string, number> = {
+    'brand new': 1000,
+    'new': 1000,
+    'new other': 1500,
+    'new (other)': 1500,
+    'refurbished': 2000,
+    'refurbished (certified)': 2000,
+    'refurbished (seller)': 2500,
+    'used': 3000,
+    'very good': 4000,
+    'good': 5000,
+    'acceptable': 6000,
+    'for parts or not working': 7000,
+  };
 
   /**
    * Search for sold listings on eBay
@@ -22,18 +43,47 @@ export class EbayScraper {
     try {
       logger.info({ query, maxResults }, 'Starting eBay search for sold listings');
 
-      // Build search URL
-      const searchUrl = this.buildSearchUrl(query);
+      // Get condition codes from config
+      const conditionCodes = config.scraper.ebay?.conditionCodes || ['1000', '1500', '3000', '4000'];
+      const enableOutlierFiltering = config.scraper.ebay?.enableOutlierFiltering ?? false;
 
-      // Fetch the search results page
-      const html = await fetchUrl(searchUrl);
+      let allListings: eBayListing[] = [];
 
-      // Parse HTML
-      const listings = this.parseListings(html);
+      // Fetch listings for each condition code
+      for (const conditionCode of conditionCodes) {
+        try {
+          const searchUrl = this.buildSearchUrl(query, conditionCode);
+          const html = await fetchUrl(searchUrl);
+          const listings = this.parseListings(html);
 
-      logger.info({ query, found: listings.length, maxResults }, 'eBay search completed');
+          logger.debug(
+            { query, conditionCode, found: listings.length },
+            'eBay search completed for condition',
+          );
 
-      return listings.slice(0, maxResults);
+          allListings.push(...listings);
+
+          // Add delay between condition queries to avoid rate limiting
+          if (conditionCodes.indexOf(conditionCode) < conditionCodes.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        } catch (error) {
+          logger.warn(
+            { query, conditionCode, error: error instanceof Error ? error.message : String(error) },
+            'Failed to fetch listings for condition code',
+          );
+          // Continue with other conditions if one fails
+        }
+      }
+
+      // Apply IQR outlier filtering if enabled
+      if (enableOutlierFiltering && allListings.length > 0) {
+        allListings = this.filterOutliers(allListings);
+      }
+
+      logger.info({ query, found: allListings.length, maxResults }, 'eBay search completed');
+
+      return allListings.slice(0, maxResults);
     } catch (error) {
       logger.error(
         { query, error: error instanceof Error ? error.message : String(error) },
@@ -45,13 +95,15 @@ export class EbayScraper {
 
   /**
    * Build search URL with parameters
+   * @param query - Search query
+   * @param conditionCode - eBay condition code (1000, 1500, 3000, 4000, etc.)
    */
-  private buildSearchUrl(query: string): string {
+  private buildSearchUrl(query: string, conditionCode: string = '3000'): string {
     const params = new URLSearchParams({
       _nkw: query, // Keyword search
       LH_Sold: '1', // Sold items filter
       LH_Complete: '1', // Completed listings
-      LH_ItemCondition: '3000', // Used items (can adjust to '4000' for 'Not Applicable' etc)
+      LH_ItemCondition: conditionCode, // Condition code
       rt: 'nc', // Return to normal categories
       _trksid: 'p3507.c0.m570',
       pgn: '1',
@@ -69,6 +121,8 @@ export class EbayScraper {
 
     // eBay updated their HTML structure - now uses .s-card instead of .s-item
     const listingElements = $('.s-card');
+
+    const minConditionThreshold = config.scraper.ebay?.minConditionThreshold ?? 3000;
 
     listingElements.each((_index, element) => {
       try {
@@ -90,16 +144,25 @@ export class EbayScraper {
         if (!url) return;
 
         // Extract subtitle/condition (optional)
-        const condition = $item.find('.s-card__subtitle').text().trim();
+        const conditionText = $item.find('.s-card__subtitle').text().trim();
+        const conditionId = this.parseConditionId(conditionText);
+
+        // Filter by minimum condition threshold
+        if (conditionId && conditionId < minConditionThreshold) {
+          logger.debug({ title, conditionId, minConditionThreshold }, 'Filtered out below threshold');
+          return;
+        }
 
         listings.push({
           title,
           price,
           url,
+          condition: conditionText,
+          conditionId,
           timestamp: new Date(),
         });
 
-        logger.debug({ title, price, url, condition }, 'Extracted listing');
+        logger.debug({ title, price, url, condition: conditionText, conditionId }, 'Extracted listing');
       } catch (error) {
         logger.debug(
           { error: error instanceof Error ? error.message : String(error) },
@@ -130,6 +193,74 @@ export class EbayScraper {
 
     // Return price if it's a valid number
     return !isNaN(price) && price > 0 ? price : null;
+  }
+
+  /**
+   * Parse condition text and map to numeric condition ID
+   * @example "Used" -> 3000
+   * @example "Very Good" -> 4000
+   */
+  private parseConditionId(conditionText: string): number | null {
+    if (!conditionText) return null;
+
+    const normalized = conditionText.toLowerCase().trim();
+
+    // Direct lookup
+    if (this.conditionCodeMap[normalized]) {
+      return this.conditionCodeMap[normalized];
+    }
+
+    // Partial matching for common variations
+    for (const [condition, code] of Object.entries(this.conditionCodeMap)) {
+      if (normalized.includes(condition) || condition.includes(normalized)) {
+        return code;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Filter outliers using IQR (Interquartile Range) method
+   * Removes prices outside [Q1 - 1.5×IQR, Q3 + 1.5×IQR]
+   */
+  private filterOutliers(listings: eBayListing[]): eBayListing[] {
+    if (listings.length < 4) {
+      // Need at least 4 prices for IQR calculation
+      return listings;
+    }
+
+    const prices = listings.map((l) => l.price).sort((a, b) => a - b);
+
+    // Calculate quartiles
+    const q1Index = Math.floor(prices.length * 0.25);
+    const q3Index = Math.floor(prices.length * 0.75);
+
+    const q1 = prices[q1Index];
+    const q3 = prices[q3Index];
+    const iqr = q3 - q1;
+
+    const lowerBound = q1 - 1.5 * iqr;
+    const upperBound = q3 + 1.5 * iqr;
+
+    const filtered = listings.filter((listing) => {
+      const isOutlier = listing.price < lowerBound || listing.price > upperBound;
+      if (isOutlier) {
+        logger.debug(
+          { price: listing.price, lowerBound, upperBound },
+          'Filtered outlier price',
+        );
+      }
+      return !isOutlier;
+    });
+
+    logger.info(
+      { original: listings.length, filtered: filtered.length, lowerBound, upperBound },
+      'IQR outlier filtering applied',
+    );
+
+    // Return filtered if we have enough data, otherwise return original
+    return filtered.length >= 4 ? filtered : listings;
   }
 
   /**

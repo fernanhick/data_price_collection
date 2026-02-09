@@ -15,6 +15,16 @@ import { ConfidenceLevel, SKU, Price } from '../../types/index.js';
  */
 export class ECMVCalculator {
   /**
+   * Cross-source price validation threshold
+   * Rejects eBay prices below this percentage of GOAT/StockX baseline
+   */
+  private readonly MINIMUM_PRICE_THRESHOLD = 0.5; // 50% of baseline
+
+  /**
+   * Enable/disable price threshold validation
+   */
+  private readonly PRICE_THRESHOLD_ENABLED = process.env.ENABLE_PRICE_THRESHOLD === 'true';
+  /**
    * Calculate ECMV for a single SKU
    */
   async calculateECMV(
@@ -37,9 +47,15 @@ export class ECMVCalculator {
       const pricesBySource = this.groupBySource(prices);
 
       // Get representative price from each source (median of last prices)
-      const eBayPrice = this.getSourceMedian(pricesBySource.ebay);
-      const goatPrice = this.getSourceMedian(pricesBySource.goat);
-      const stockxPrice = this.getSourceMedian(pricesBySource.stockx);
+      let eBayPrice = this.getSourceMedian(pricesBySource.ebay);
+      let goatPrice = this.getSourceMedian(pricesBySource.goat);
+      let stockxPrice = this.getSourceMedian(pricesBySource.stockx);
+
+      // Apply cross-source price threshold to reject damaged/replica items
+      if (this.PRICE_THRESHOLD_ENABLED) {
+        const thresholdResult = this.applyPriceThreshold(eBayPrice, goatPrice, stockxPrice);
+        eBayPrice = thresholdResult.eBayPrice;
+      }
 
       // Calculate weighted average
       const { ecmv, weights } = this.calculateWeightedAverage(eBayPrice, goatPrice, stockxPrice);
@@ -105,16 +121,24 @@ export class ECMVCalculator {
   }
 
   /**
-   * Get median price from source
+   * Get median price from source with outlier removal
    * Returns null if no prices available
    */
   private getSourceMedian(prices: Price[]): number | null {
     if (prices.length === 0) return null;
 
     // Convert to numbers and sort (prices come from DB as strings)
-    const sorted = prices
+    let sorted = prices
       .map((p) => (typeof p.price === 'string' ? parseFloat(p.price) : p.price))
       .sort((a, b) => a - b);
+
+    // Apply IQR outlier removal
+    if (sorted.length >= 4) {
+      const filtered = this.removeOutliers(sorted);
+      if (filtered.length >= 4) {
+        sorted = filtered;
+      }
+    }
 
     // Calculate median
     const mid = Math.floor(sorted.length / 2);
@@ -209,6 +233,83 @@ export class ECMVCalculator {
     }
 
     return ConfidenceLevel.LOW;
+  }
+
+  /**
+   * Apply price threshold validation
+   * Rejects eBay prices below 50% of GOAT/StockX baseline
+   */
+  private applyPriceThreshold(
+    eBayPrice: number | null,
+    goatPrice: number | null,
+    stockxPrice: number | null,
+  ): { eBayPrice: number | null } {
+    if (!eBayPrice || (!goatPrice && !stockxPrice)) {
+      return { eBayPrice };
+    }
+
+    // Calculate baseline from available sources
+    const availablePrices = [goatPrice, stockxPrice].filter((p) => p !== null) as number[];
+    if (availablePrices.length === 0) {
+      return { eBayPrice };
+    }
+
+    const baseline = availablePrices.reduce((a, b) => a + b, 0) / availablePrices.length;
+    const threshold = baseline * this.MINIMUM_PRICE_THRESHOLD;
+
+    if (eBayPrice < threshold) {
+      logger.warn(
+        {
+          eBayPrice,
+          baseline,
+          threshold,
+          removed: true,
+        },
+        'eBay price rejected - below 50% threshold (possible damaged/replica item)',
+      );
+      return { eBayPrice: null };
+    }
+
+    return { eBayPrice };
+  }
+
+  /**
+   * Remove outliers using IQR (Interquartile Range) method
+   * Removes prices outside [Q1 - 1.5×IQR, Q3 + 1.5×IQR]
+   */
+  private removeOutliers(sorted: number[]): number[] {
+    if (sorted.length < 4) {
+      return sorted;
+    }
+
+    // Calculate quartiles
+    const q1Index = Math.floor(sorted.length * 0.25);
+    const q3Index = Math.floor(sorted.length * 0.75);
+
+    const q1 = sorted[q1Index];
+    const q3 = sorted[q3Index];
+    const iqr = q3 - q1;
+
+    const lowerBound = q1 - 1.5 * iqr;
+    const upperBound = q3 + 1.5 * iqr;
+
+    const filtered = sorted.filter((price) => {
+      return price >= lowerBound && price <= upperBound;
+    });
+
+    if (filtered.length !== sorted.length) {
+      logger.debug(
+        {
+          original: sorted.length,
+          filtered: filtered.length,
+          lowerBound,
+          upperBound,
+        },
+        'IQR outlier filtering applied',
+      );
+    }
+
+    return filtered;
   }
 
   /**

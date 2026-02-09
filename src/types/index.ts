@@ -130,6 +130,8 @@ export interface eBayListing {
   title: string;
   price: number;
   url: string;
+  condition?: string;       // Parsed condition text
+  conditionId?: number | null;    // Numeric code (1000, 3000, etc.)
   timestamp: Date;
 }
 
@@ -187,6 +189,11 @@ export interface AppConfig {
   scraper: {
     timeoutMs: number;
     retryAttempts: number;
+    ebay?: {
+      conditionCodes?: string[];
+      minConditionThreshold?: number;
+      enableOutlierFiltering?: boolean;
+    };
   };
   api: {
     maxRequestsPerMinute: number;
