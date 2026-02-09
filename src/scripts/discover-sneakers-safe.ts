@@ -91,6 +91,11 @@ async function discoverSneakersSafe() {
         // Skip if no SKU
         if (!listing.sku || listing.sku.trim() === '') continue;
 
+        // Skip non-footwear items (safety check)
+        const nameLower = listing.name.toLowerCase();
+        const nonFootwearKeywords = ['tee', 'shirt', 'hoodie', 'jacket', 'pants', 'shorts', 'hat', 'cap', 'bag', 'socks'];
+        if (nonFootwearKeywords.some(keyword => nameLower.includes(keyword))) continue;
+
         // Skip duplicates
         const normalizedSku = listing.sku.toUpperCase().replace(/\s+/g, '-');
         if (duplicates.has(normalizedSku)) continue;

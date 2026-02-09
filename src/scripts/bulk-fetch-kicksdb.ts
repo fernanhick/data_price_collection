@@ -227,6 +227,59 @@ function extractReleaseDate(description?: string): string | null {
 }
 
 /**
+ * Check if product is footwear (not apparel/accessories)
+ */
+function isFootwear(product: KicksDBProduct): boolean {
+  const category = (
+    product.product_type ||
+    product.productCategory ||
+    product.category ||
+    product.silhouette ||
+    ''
+  ).toLowerCase();
+
+  const title = (
+    product.title ||
+    product.primary_title ||
+    product.name ||
+    ''
+  ).toLowerCase();
+
+  // Footwear categories/keywords
+  const footwearKeywords = [
+    'shoe', 'shoes', 'sneaker', 'sneakers', 'footwear',
+    'boot', 'boots', 'sandal', 'sandals', 'slide', 'slides',
+    'slipper', 'slippers', 'clog', 'clogs', 'flip-flop',
+    'runner', 'running', 'trainer', 'trainers'
+  ];
+
+  // Non-footwear categories to exclude
+  const excludedCategories = [
+    'apparel', 'clothing', 'shirt', 'tee', 'hoodie', 'jacket',
+    'pants', 'shorts', 'hat', 'cap', 'beanie', 'accessory',
+    'accessories', 'bag', 'backpack', 'watch', 'jewelry',
+    'socks', 'underwear', 'collectible'
+  ];
+
+  // Check for excluded categories
+  for (const excluded of excludedCategories) {
+    if (category.includes(excluded) || title.includes(excluded)) {
+      return false;
+    }
+  }
+
+  // Check for footwear keywords
+  for (const keyword of footwearKeywords) {
+    if (category.includes(keyword) || title.includes(keyword)) {
+      return true;
+    }
+  }
+
+  // If no clear category match, be conservative and reject
+  return false;
+}
+
+/**
  * Map KicksDB product to our database schema
  */
 function mapProductToSKU(product: KicksDBProduct) {
@@ -369,6 +422,19 @@ async function bulkFetch(options: BulkFetchOptions = {}) {
 
       // Process each product
       for (const product of products) {
+        // Skip non-footwear items
+        if (!isFootwear(product)) {
+          totalSkipped++;
+          logger.debug(
+            {
+              title: product.title || product.name,
+              category: product.product_type || product.category
+            },
+            'Skipped non-footwear product'
+          );
+          continue;
+        }
+
         const sku = mapProductToSKU(product);
         const inserted = await insertSneaker(sku);
 

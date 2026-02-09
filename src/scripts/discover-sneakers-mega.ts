@@ -189,6 +189,11 @@ async function discoverSneakersMega() {
         for (const listing of listings) {
           if (!listing.sku || listing.sku.trim() === '') continue;
 
+          // Skip non-footwear items (safety check)
+          const nameLower = listing.name.toLowerCase();
+          const nonFootwearKeywords = ['tee', 'shirt', 'hoodie', 'jacket', 'pants', 'shorts', 'hat', 'cap', 'bag', 'socks'];
+          if (nonFootwearKeywords.some(keyword => nameLower.includes(keyword))) continue;
+
           const normalizedSku = listing.sku.toUpperCase().replace(/\s+/g, '-');
           if (duplicates.has(normalizedSku)) continue;
 
