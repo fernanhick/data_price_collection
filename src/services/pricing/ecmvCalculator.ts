@@ -21,8 +21,12 @@ export class ECMVCalculator {
     sku: SKU,
   ): Promise<{ ecmv: number; confidence: ConfidenceLevel; components: any } | null> {
     try {
-      // Fetch latest prices from each source (last 24 hours)
-      const prices = await this.getPricesForSku(sku.id, 24);
+      // Fetch latest prices from each source (last 72 hours)
+      // Using 72h window to cover all tier schedules:
+      // - Tier 1: 4x daily (always fresh)
+      // - Tier 2: 1x daily (up to 36h between fetches)
+      // - Tier 3: 2x weekly (covered if recently fetched)
+      const prices = await this.getPricesForSku(sku.id, 72);
 
       if (prices.length === 0) {
         logger.warn({ styleCode: sku.style_code }, 'No prices found for ECMV calculation');
