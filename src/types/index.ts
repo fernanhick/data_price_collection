@@ -197,6 +197,7 @@ export interface AppConfig {
     tier1Cron: string;
     tier2Cron: string;
     tier3Cron: string;
+    ecmvCron: string;
   };
   logging: {
     level: 'debug' | 'info' | 'warn' | 'error';

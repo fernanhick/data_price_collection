@@ -23,6 +23,7 @@
     "sneaker:kicksdb-all": "tsx src/scripts/fetch-all-kicksdb.ts",
     "sneaker:kicksdb-backfill": "tsx src/scripts/backfill-kicksdb-data.ts",
     "prices:fetch": "tsx src/scripts/fetch-prices-manual.ts",
+    "ecmv:backfill": "tsx src/scripts/backfill-price-history.ts",
     "scraper:test": "tsx src/scripts/test-scraper.ts",
     "scraper:test-stylecode": "tsx src/scripts/test-stylecode.ts",
     "admin:create-user": "tsx scripts/create-admin-user.ts"

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
-import ecmvCalculator from '../services/pricing/ecmvCalculator.js';
+import ecmvPersistence from '../services/pricing/ecmvPersistence.js';
 import { SKU, PriceResponse } from '../types/index.js';
 
 const router = Router();
@@ -49,11 +49,11 @@ router.get('/:style_code', async (req: Request, res: Response): Promise<void> =>
         'Using cached ECMV',
       );
     } else {
-      // Calculate ECMV on the fly if not cached
-      logger.debug({ style_code }, 'ECMV not cached, calculating');
-      const calc = await ecmvCalculator.calculateECMV(sku);
+      // Calculate ECMV and save to database
+      logger.debug({ style_code }, 'ECMV not cached, calculating and saving');
+      const saved = await ecmvPersistence.calculateAndSave(sku, userId);
 
-      if (!calc) {
+      if (!saved) {
         res.status(404).json({
           error: 'No price data available',
           message: 'Try again after first price update',
@@ -61,7 +61,7 @@ router.get('/:style_code', async (req: Request, res: Response): Promise<void> =>
         return;
       }
 
-      priceData = calc;
+      priceData = saved;
     }
 
     // Log API usage

@@ -2,7 +2,9 @@ import cron from 'node-cron';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { PriceFetcher } from './pricing/priceFetcher.js';
+import ecmvPersistence from './pricing/ecmvPersistence.js';
 import { query as dbQuery } from '../db/index.js';
+import { SKU } from '../types/index.js';
 
 /**
  * Price Update Scheduler
@@ -17,9 +19,11 @@ export class PriceUpdateScheduler {
   private tier1Task: cron.ScheduledTask | null = null;
   private tier2Task: cron.ScheduledTask | null = null;
   private tier3Task: cron.ScheduledTask | null = null;
+  private ecmvTask: cron.ScheduledTask | null = null;
   private tier1Running = false;
   private tier2Running = false;
   private tier3Running = false;
+  private ecmvRunning = false;
 
   /**
    * Start all scheduler tasks
@@ -35,6 +39,7 @@ export class PriceUpdateScheduler {
     this.startTier1Schedule();
     this.startTier2Schedule();
     this.startTier3Schedule();
+    this.startECMVSchedule();
 
     logger.info('✅ All price update schedules started');
   }
@@ -109,6 +114,61 @@ export class PriceUpdateScheduler {
   }
 
   /**
+   * ECMV Calculation: Calculate ECMV for recently updated SKUs
+   * Schedule: Every 6 hours, 1 hour after tier1 price fetches (7am, 1pm, 7pm, 1am UTC)
+   * Only processes SKUs with price updates in last 24 hours (efficient)
+   */
+  private startECMVSchedule(): void {
+    logger.info(`ECMV calculation schedule: ${config.scheduler.ecmvCron}`);
+
+    this.ecmvTask = cron.schedule(config.scheduler.ecmvCron, async () => {
+      logger.info('🧮 Starting ECMV calculation for recently updated SKUs');
+      const startTime = Date.now();
+
+      try {
+        // Get SKUs with price updates in last 24 hours
+        const result = await dbQuery<SKU>(
+          `SELECT DISTINCT s.*
+           FROM skus s
+           INNER JOIN prices p ON s.id = p.sku_id
+           WHERE p.timestamp > NOW() - INTERVAL '24 hours'
+           ORDER BY s.tier ASC, s.id ASC`,
+          [],
+        );
+
+        const skus = result.rows;
+        logger.info({ count: skus.length }, 'Found SKUs with recent price updates');
+
+        if (skus.length === 0) {
+          logger.info('No SKUs with recent price updates, skipping ECMV calculation');
+          return;
+        }
+
+        // Calculate and save ECMV for each SKU
+        const successCount = await ecmvPersistence.bulkCalculateAndSave(skus, 'scheduler');
+
+        const duration = Date.now() - startTime;
+        logger.info(
+          {
+            total: skus.length,
+            success: successCount,
+            failed: skus.length - successCount,
+            duration_ms: duration,
+          },
+          '✅ ECMV calculation completed',
+        );
+      } catch (error) {
+        logger.error(
+          { error: error instanceof Error ? error.message : String(error) },
+          '❌ ECMV calculation failed',
+        );
+        await this.logFetchFailure('ecmv');
+      }
+    });
+    this.ecmvRunning = true;
+  }
+
+  /**
    * Log fetch failure for monitoring
    */
   private async logFetchFailure(tier: string): Promise<void> {
@@ -141,6 +201,10 @@ export class PriceUpdateScheduler {
       this.tier3Task.stop();
       this.tier3Running = false;
     }
+    if (this.ecmvTask) {
+      this.ecmvTask.stop();
+      this.ecmvRunning = false;
+    }
 
     logger.info('✅ All price update schedules stopped');
   }
@@ -153,6 +217,7 @@ export class PriceUpdateScheduler {
     tier1: { running: boolean; schedule: string };
     tier2: { running: boolean; schedule: string };
     tier3: { running: boolean; schedule: string };
+    ecmv: { running: boolean; schedule: string };
   } {
     return {
       enabled: config.scheduler.enabled,
@@ -167,6 +232,10 @@ export class PriceUpdateScheduler {
       tier3: {
         running: this.tier3Running,
         schedule: config.scheduler.tier3Cron,
+      },
+      ecmv: {
+        running: this.ecmvRunning,
+        schedule: config.scheduler.ecmvCron,
       },
     };
   }

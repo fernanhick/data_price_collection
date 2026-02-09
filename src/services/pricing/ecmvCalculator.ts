@@ -107,8 +107,10 @@ export class ECMVCalculator {
   private getSourceMedian(prices: Price[]): number | null {
     if (prices.length === 0) return null;
 
-    // Sort prices
-    const sorted = prices.map((p) => p.price).sort((a, b) => a - b);
+    // Convert to numbers and sort (prices come from DB as strings)
+    const sorted = prices
+      .map((p) => (typeof p.price === 'string' ? parseFloat(p.price) : p.price))
+      .sort((a, b) => a - b);
 
     // Calculate median
     const mid = Math.floor(sorted.length / 2);
