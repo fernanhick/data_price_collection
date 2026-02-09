@@ -274,11 +274,21 @@
         async function loadAnalytics() {
             try {
                 console.log('Loading analytics...');
+
+                // Check if user is logged in
+                if (!isLoggedIn()) {
+                    console.error('User not logged in');
+                    document.getElementById('loading').textContent = 'Not logged in. Redirecting...';
+                    setTimeout(() => window.location.href = '/admin', 1000);
+                    return;
+                }
+
+                console.log('Fetching analytics data...');
                 const data = await apiRequest('GET', '/api/analytics');
 
                 if (!data) {
                     console.error('No data returned from analytics API');
-                    return;
+                    throw new Error('Authentication failed or no data available. Please try logging in again.');
                 }
 
                 console.log('Analytics data received:', data);
@@ -315,7 +325,21 @@
                 document.getElementById('analyticsContent').style.display = 'block';
 
             } catch (error) {
-                document.getElementById('loading').textContent = 'Error loading analytics: ' + error.message;
+                console.error('Error in loadAnalytics:', error);
+                const loadingEl = document.getElementById('loading');
+                loadingEl.innerHTML = `
+                    <div style="color: red; padding: 20px;">
+                        <h3>❌ Error Loading Analytics</h3>
+                        <p>${error.message}</p>
+                        <br>
+                        <button onclick="window.location.reload()" class="btn-primary">
+                            🔄 Retry
+                        </button>
+                        <button onclick="window.location.href='/admin'" class="btn-secondary">
+                            ← Back to Dashboard
+                        </button>
+                    </div>
+                `;
             }
         }
 
@@ -474,10 +498,49 @@
             `).join('');
         }
 
+        // Add timeout protection
+        let loadingTimeout;
+
         // Load analytics on page load
         if (isLoggedIn()) {
-            loadAnalytics();
+            console.log('User is logged in, loading analytics...');
+            console.log('JWT Token present:', !!getToken());
+
+            // Set a timeout to detect if loading hangs
+            loadingTimeout = setTimeout(() => {
+                console.error('Analytics loading timeout!');
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl && loadingEl.style.display !== 'none') {
+                    loadingEl.innerHTML = `
+                        <div style="color: orange; padding: 20px;">
+                            <h3>⏱️ Request Timeout</h3>
+                            <p>The analytics request is taking too long.</p>
+                            <p>This might be due to:</p>
+                            <ul style="text-align: left; margin: 20px auto; max-width: 400px;">
+                                <li>Authentication issues</li>
+                                <li>Server not responding</li>
+                                <li>Network connectivity problems</li>
+                            </ul>
+                            <button onclick="window.location.reload()" class="btn-primary">
+                                🔄 Retry
+                            </button>
+                            <button onclick="window.location.href='/admin'" class="btn-secondary">
+                                ← Back to Dashboard
+                            </button>
+                        </div>
+                    `;
+                }
+            }, 10000); // 10 second timeout
+
+            loadAnalytics().then(() => {
+                clearTimeout(loadingTimeout);
+                console.log('Analytics loaded successfully');
+            }).catch(error => {
+                clearTimeout(loadingTimeout);
+                console.error('Analytics loading failed:', error);
+            });
         } else {
+            console.log('User not logged in, redirecting to /admin');
             window.location.href = '/admin';
         }
     </script>
