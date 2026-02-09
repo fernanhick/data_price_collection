@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics - Sneaker Catalog</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
         .analytics-container {
             padding: 20px;
@@ -262,12 +262,26 @@
 
     <script src="app.js"></script>
     <script>
+        // Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded!');
+            alert('Error: Chart.js library failed to load. Please refresh the page.');
+        } else {
+            console.log('Chart.js loaded successfully, version:', Chart.version);
+        }
+
         // Fetch and display analytics
         async function loadAnalytics() {
             try {
+                console.log('Loading analytics...');
                 const data = await apiRequest('GET', '/api/analytics');
 
-                if (!data) return;
+                if (!data) {
+                    console.error('No data returned from analytics API');
+                    return;
+                }
+
+                console.log('Analytics data received:', data);
 
                 // Update summary stats
                 document.getElementById('totalSneakers').textContent = data.summary.total;
@@ -306,9 +320,14 @@
         }
 
         function createBrandChart(brands) {
-            const top10 = brands.slice(0, 10);
-            const ctx = document.getElementById('brandChart').getContext('2d');
-            new Chart(ctx, {
+            try {
+                console.log('Creating brand chart...');
+                if (typeof Chart === 'undefined') {
+                    throw new Error('Chart.js library not loaded');
+                }
+                const top10 = brands.slice(0, 10);
+                const ctx = document.getElementById('brandChart').getContext('2d');
+                new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: top10.map(b => b.brand),
@@ -331,9 +350,19 @@
                     }
                 }
             });
+            } catch (error) {
+                console.error('Error creating brand chart:', error);
+                document.getElementById('brandChart').parentElement.innerHTML =
+                    '<p style="color: red;">Error loading chart: ' + error.message + '</p>';
+            }
         }
 
         function createPriceRangeChart(priceRanges) {
+            try {
+                console.log('Creating price range chart...');
+                if (typeof Chart === 'undefined') {
+                    throw new Error('Chart.js library not loaded');
+                }
             const ctx = document.getElementById('priceRangeChart').getContext('2d');
             new Chart(ctx, {
                 type: 'doughnut',
