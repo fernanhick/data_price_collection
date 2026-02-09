@@ -403,25 +403,33 @@ Get current market price (ECMV) for a specific sneaker by style code.
 
 #### `GET /api/prices/:style_code/history`
 
-Get historical price data for a specific sneaker.
+Get historical price data for a specific sneaker with flexible time ranges.
 
 **Authentication:** Required
 
 **Path Parameters:**
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `style_code` | string | Yes | Product style code |
+| `style_code` | string | Yes | Product style code (e.g., "555088-001") |
 
 **Query Parameters:**
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `days` | integer | No | 30 | Number of days of history (max: 365) |
-| `limit` | integer | No | 100 | Max data points (max: 1000) |
+| `limit` | integer | No | 100 | Max data points returned (max: 1000) |
+
+**Common Time Ranges:**
+- **30 days** (1 month): `days=30` - Default, ideal for recent trends
+- **60 days** (2 months): `days=60` - Good for medium-term analysis
+- **90 days** (3 months): `days=90` - Quarter view, seasonal trends
+- **180 days** (6 months): `days=180` - Half-year analysis
+- **365 days** (1 year): `days=365` - Full year historical data
 
 **Response:**
 ```json
 {
   "style_code": "555088-001",
+  "days_requested": 30,
   "history": [
     {
       "ecmv": 185.50,
@@ -442,6 +450,16 @@ Get historical price data for a specific sneaker.
         "goat_price": 188.00,
         "stockx_price": 185.00
       }
+    },
+    {
+      "ecmv": 181.50,
+      "confidence": "High",
+      "timestamp": "2026-02-07T00:00:00.000Z",
+      "components": {
+        "ebay_price": 177.00,
+        "goat_price": 186.00,
+        "stockx_price": 183.00
+      }
     }
   ],
   "summary": {
@@ -449,10 +467,320 @@ Get historical price data for a specific sneaker.
     "min_price": 175.00,
     "max_price": 192.00,
     "avg_price": 184.25,
-    "data_points": 30
+    "price_change": {
+      "amount": 10.50,
+      "percentage": 6.0
+    },
+    "data_points": 30,
+    "date_range": {
+      "start": "2026-01-10T00:00:00.000Z",
+      "end": "2026-02-09T00:00:00.000Z"
+    }
   }
 }
 ```
+
+**Example Requests:**
+
+**30-Day History (Default):**
+```bash
+GET /api/prices/555088-001/history
+# or explicitly
+GET /api/prices/555088-001/history?days=30
+```
+
+**60-Day History:**
+```bash
+GET /api/prices/555088-001/history?days=60
+```
+
+**90-Day History with Limited Data Points:**
+```bash
+GET /api/prices/555088-001/history?days=90&limit=50
+```
+
+**1-Year Full History:**
+```bash
+GET /api/prices/555088-001/history?days=365&limit=365
+```
+
+**Processing Guide for Mobile Apps:**
+
+**1. Requesting Different Time Ranges:**
+```javascript
+// Define your time range presets
+const TIME_RANGES = {
+  WEEK: 7,
+  MONTH: 30,
+  TWO_MONTHS: 60,
+  QUARTER: 90,
+  HALF_YEAR: 180,
+  YEAR: 365
+};
+
+// Function to fetch price history
+async function fetchPriceHistory(styleCode, days = TIME_RANGES.MONTH) {
+  const url = `${API_BASE}/api/prices/${styleCode}/history?days=${days}`;
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${getAuthToken()}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch history: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+// Usage examples
+const monthlyData = await fetchPriceHistory('555088-001', TIME_RANGES.MONTH);
+const quarterlyData = await fetchPriceHistory('555088-001', TIME_RANGES.QUARTER);
+const yearlyData = await fetchPriceHistory('555088-001', TIME_RANGES.YEAR);
+```
+
+**2. Processing History Data for Charts:**
+```javascript
+// Transform API data for chart libraries (Chart.js, Victory, etc.)
+function processHistoryForChart(historyData) {
+  const { history, summary } = historyData;
+
+  // Sort by date (oldest to newest) for proper chart display
+  const sortedHistory = [...history].sort((a, b) =>
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  // Extract data for chart
+  const chartData = {
+    labels: sortedHistory.map(item => {
+      const date = new Date(item.timestamp);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }),
+    datasets: [
+      {
+        label: 'Market Price',
+        data: sortedHistory.map(item => item.ecmv),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        tension: 0.4
+      }
+    ]
+  };
+
+  return {
+    chartData,
+    summary: {
+      current: summary.current_price,
+      min: summary.min_price,
+      max: summary.max_price,
+      average: summary.avg_price,
+      change: summary.price_change
+    }
+  };
+}
+
+// Usage
+const data = await fetchPriceHistory('555088-001', 30);
+const chartReady = processHistoryForChart(data);
+```
+
+**3. Calculating Price Trends:**
+```javascript
+function analyzePriceTrend(historyData) {
+  const { history, summary } = historyData;
+
+  if (history.length < 2) {
+    return { trend: 'insufficient_data' };
+  }
+
+  // Sort by date
+  const sorted = [...history].sort((a, b) =>
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  const oldest = sorted[0].ecmv;
+  const newest = sorted[sorted.length - 1].ecmv;
+  const change = newest - oldest;
+  const percentChange = (change / oldest) * 100;
+
+  return {
+    trend: change > 0 ? 'increasing' : change < 0 ? 'decreasing' : 'stable',
+    change: change.toFixed(2),
+    percentChange: percentChange.toFixed(2),
+    direction: change > 0 ? '↑' : change < 0 ? '↓' : '→',
+    volatility: calculateVolatility(sorted),
+    summary: {
+      start_price: oldest,
+      end_price: newest,
+      highest: summary.max_price,
+      lowest: summary.min_price
+    }
+  };
+}
+
+function calculateVolatility(sortedHistory) {
+  const prices = sortedHistory.map(h => h.ecmv);
+  const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const variance = prices.reduce((sum, price) =>
+    sum + Math.pow(price - avg, 2), 0) / prices.length;
+  const stdDev = Math.sqrt(variance);
+
+  // Volatility as percentage of average price
+  const volatility = (stdDev / avg) * 100;
+
+  return {
+    value: volatility.toFixed(2),
+    level: volatility < 5 ? 'low' : volatility < 15 ? 'medium' : 'high'
+  };
+}
+```
+
+**4. Display Price Change Indicators:**
+```javascript
+function getPriceChangeIndicator(change, percentChange) {
+  const isPositive = change > 0;
+  const isSignificant = Math.abs(percentChange) > 5;
+
+  return {
+    color: isPositive ? '#10B981' : '#EF4444', // Green or Red
+    icon: isPositive ? '📈' : '📉',
+    label: isPositive ? 'Up' : 'Down',
+    displayText: `${isPositive ? '+' : ''}$${Math.abs(change).toFixed(2)} (${isPositive ? '+' : ''}${percentChange.toFixed(1)}%)`,
+    significance: isSignificant ? 'significant' : 'minor'
+  };
+}
+
+// Usage in UI
+const trend = analyzePriceTrend(historyData);
+const indicator = getPriceChangeIndicator(trend.change, trend.percentChange);
+
+// Display: "📈 Up +$10.50 (+6.0%)" in green
+console.log(`${indicator.icon} ${indicator.label} ${indicator.displayText}`);
+```
+
+**5. Multi-Period Comparison:**
+```javascript
+// Fetch and compare multiple time periods
+async function compareTimePeriods(styleCode) {
+  const [month, quarter, year] = await Promise.all([
+    fetchPriceHistory(styleCode, 30),
+    fetchPriceHistory(styleCode, 90),
+    fetchPriceHistory(styleCode, 365)
+  ]);
+
+  return {
+    '30_days': analyzePriceTrend(month),
+    '90_days': analyzePriceTrend(quarter),
+    '365_days': analyzePriceTrend(year)
+  };
+}
+
+// Usage
+const comparison = await compareTimePeriods('555088-001');
+console.log('30-day trend:', comparison['30_days'].trend);
+console.log('90-day trend:', comparison['90_days'].trend);
+console.log('Yearly trend:', comparison['365_days'].trend);
+```
+
+**React Native Example:**
+```jsx
+import React, { useState, useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+
+const PriceHistoryChart = ({ styleCode, days = 30 }) => {
+  const [loading, setLoading] = useState(true);
+  const [chartData, setChartData] = useState(null);
+  const [trend, setTrend] = useState(null);
+
+  useEffect(() => {
+    loadPriceHistory();
+  }, [styleCode, days]);
+
+  const loadPriceHistory = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchPriceHistory(styleCode, days);
+      const processed = processHistoryForChart(data);
+      const trendAnalysis = analyzePriceTrend(data);
+
+      setChartData(processed.chartData);
+      setTrend(trendAnalysis);
+    } catch (error) {
+      console.error('Failed to load price history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <ActivityIndicator size="large" color="#3B82F6" />;
+  }
+
+  const indicator = getPriceChangeIndicator(trend.change, trend.percentChange);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>{days}-Day Price History</Text>
+
+      <View style={styles.statsRow}>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>Current</Text>
+          <Text style={styles.statValue}>${trend.summary.end_price}</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>Change</Text>
+          <Text style={[styles.statValue, { color: indicator.color }]}>
+            {indicator.displayText}
+          </Text>
+        </View>
+      </View>
+
+      <LineChart
+        data={chartData}
+        width={350}
+        height={220}
+        chartConfig={{
+          backgroundColor: '#ffffff',
+          backgroundGradientFrom: '#ffffff',
+          backgroundGradientTo: '#ffffff',
+          decimalPlaces: 2,
+          color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+        }}
+        bezier
+        style={styles.chart}
+      />
+
+      <View style={styles.summaryRow}>
+        <Text>High: ${trend.summary.highest}</Text>
+        <Text>Low: ${trend.summary.lowest}</Text>
+        <Text>Avg: ${trend.summary.average}</Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { padding: 16 },
+  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  stat: { flex: 1 },
+  statLabel: { fontSize: 12, color: '#666' },
+  statValue: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
+  chart: { marginVertical: 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-around' }
+});
+
+export default PriceHistoryChart;
+```
+
+**Error Responses:**
+- `400`: Invalid style_code or days parameter
+- `404`: Style code not found
+- `404`: No price history available for this SKU
 
 ---
 
@@ -922,6 +1250,593 @@ curl -X GET "https://api.sneakersbook.com/api/skus/catalog?search=dunk&limit=10"
   ]
 }
 ```
+
+### Example 5: Price History - 30, 60, 90 Day Analysis
+
+#### 30-Day Price History (Recent Trends)
+
+**Request:**
+```bash
+curl -X GET "https://api.sneakersbook.com/api/prices/555088-001/history?days=30" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+```json
+{
+  "style_code": "555088-001",
+  "days_requested": 30,
+  "history": [
+    {
+      "ecmv": 185.50,
+      "confidence": "High",
+      "timestamp": "2026-02-09T00:00:00.000Z",
+      "components": {
+        "ebay_price": 180.00,
+        "goat_price": 190.00,
+        "stockx_price": 187.00
+      }
+    },
+    {
+      "ecmv": 183.00,
+      "confidence": "High",
+      "timestamp": "2026-02-08T00:00:00.000Z",
+      "components": {
+        "ebay_price": 178.00,
+        "goat_price": 188.00,
+        "stockx_price": 185.00
+      }
+    }
+    // ... 28 more data points
+  ],
+  "summary": {
+    "current_price": 185.50,
+    "min_price": 175.00,
+    "max_price": 192.00,
+    "avg_price": 184.25,
+    "price_change": {
+      "amount": 10.50,
+      "percentage": 6.0
+    },
+    "data_points": 30,
+    "date_range": {
+      "start": "2026-01-10T00:00:00.000Z",
+      "end": "2026-02-09T00:00:00.000Z"
+    }
+  }
+}
+```
+
+**Use Case:** Display recent price movements, identify short-term trends
+
+---
+
+#### 60-Day Price History (Medium-Term Analysis)
+
+**Request:**
+```bash
+curl -X GET "https://api.sneakersbook.com/api/prices/555088-001/history?days=60&limit=60" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+```json
+{
+  "style_code": "555088-001",
+  "days_requested": 60,
+  "history": [
+    {
+      "ecmv": 185.50,
+      "confidence": "High",
+      "timestamp": "2026-02-09T00:00:00.000Z",
+      "components": {
+        "ebay_price": 180.00,
+        "goat_price": 190.00,
+        "stockx_price": 187.00
+      }
+    }
+    // ... 59 more data points covering 2 months
+  ],
+  "summary": {
+    "current_price": 185.50,
+    "min_price": 165.00,
+    "max_price": 195.00,
+    "avg_price": 180.75,
+    "price_change": {
+      "amount": 15.50,
+      "percentage": 9.1
+    },
+    "data_points": 60,
+    "date_range": {
+      "start": "2025-12-11T00:00:00.000Z",
+      "end": "2026-02-09T00:00:00.000Z"
+    }
+  }
+}
+```
+
+**Use Case:** Identify medium-term trends, compare pre/post release impact
+
+---
+
+#### 90-Day Price History (Quarterly Analysis)
+
+**Request:**
+```bash
+curl -X GET "https://api.sneakersbook.com/api/prices/555088-001/history?days=90&limit=90" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+```json
+{
+  "style_code": "555088-001",
+  "days_requested": 90,
+  "history": [
+    {
+      "ecmv": 185.50,
+      "confidence": "High",
+      "timestamp": "2026-02-09T00:00:00.000Z",
+      "components": {
+        "ebay_price": 180.00,
+        "goat_price": 190.00,
+        "stockx_price": 187.00
+      }
+    }
+    // ... 89 more data points covering 3 months
+  ],
+  "summary": {
+    "current_price": 185.50,
+    "min_price": 158.00,
+    "max_price": 198.00,
+    "avg_price": 178.50,
+    "price_change": {
+      "amount": 20.50,
+      "percentage": 12.4
+    },
+    "data_points": 90,
+    "date_range": {
+      "start": "2025-11-11T00:00:00.000Z",
+      "end": "2026-02-09T00:00:00.000Z"
+    }
+  }
+}
+```
+
+**Use Case:** Seasonal trend analysis, quarterly investment tracking
+
+---
+
+### Example 6: Complete Mobile Implementation - Price History Screen
+
+**TypeScript/React Native Implementation:**
+
+```typescript
+// types.ts
+interface PriceHistoryData {
+  style_code: string;
+  days_requested: number;
+  history: Array<{
+    ecmv: number;
+    confidence: string;
+    timestamp: string;
+    components: {
+      ebay_price?: number;
+      goat_price?: number;
+      stockx_price?: number;
+    };
+  }>;
+  summary: {
+    current_price: number;
+    min_price: number;
+    max_price: number;
+    avg_price: number;
+    price_change: {
+      amount: number;
+      percentage: number;
+    };
+    data_points: number;
+    date_range: {
+      start: string;
+      end: string;
+    };
+  };
+}
+
+// api.ts
+const API_BASE = 'https://api.sneakersbook.com';
+
+export const PriceHistoryAPI = {
+  // Fetch price history with specified days
+  async getHistory(
+    styleCode: string,
+    days: number = 30,
+    authToken: string
+  ): Promise<PriceHistoryData> {
+    const url = `${API_BASE}/api/prices/${styleCode}/history?days=${days}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch price history');
+    }
+
+    return await response.json();
+  },
+
+  // Fetch multiple time ranges for comparison
+  async getMultiPeriodHistory(
+    styleCode: string,
+    authToken: string
+  ): Promise<{
+    month: PriceHistoryData;
+    twoMonths: PriceHistoryData;
+    quarter: PriceHistoryData;
+  }> {
+    const [month, twoMonths, quarter] = await Promise.all([
+      this.getHistory(styleCode, 30, authToken),
+      this.getHistory(styleCode, 60, authToken),
+      this.getHistory(styleCode, 90, authToken)
+    ]);
+
+    return { month, twoMonths, quarter };
+  }
+};
+
+// PriceHistoryScreen.tsx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView
+} from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+
+type TimeRange = 30 | 60 | 90;
+
+const PriceHistoryScreen = ({ styleCode }: { styleCode: string }) => {
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(30);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PriceHistoryData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadPriceHistory();
+  }, [styleCode, selectedRange]);
+
+  const loadPriceHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const authToken = await getAuthToken(); // Your auth method
+      const historyData = await PriceHistoryAPI.getHistory(
+        styleCode,
+        selectedRange,
+        authToken
+      );
+
+      setData(historyData);
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load price history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatChartData = () => {
+    if (!data) return null;
+
+    // Sort by date (oldest to newest)
+    const sorted = [...data.history].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    // Sample data points for chart (max 10 labels for readability)
+    const step = Math.ceil(sorted.length / 10);
+    const sampled = sorted.filter((_, i) => i % step === 0);
+
+    return {
+      labels: sampled.map(item =>
+        new Date(item.timestamp).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        })
+      ),
+      datasets: [{
+        data: sampled.map(item => item.ecmv)
+      }]
+    };
+  };
+
+  const getPriceChangeColor = () => {
+    if (!data) return '#666';
+    return data.summary.price_change.amount >= 0 ? '#10B981' : '#EF4444';
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={styles.loadingText}>Loading price history...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>Error: {error}</Text>
+        <TouchableOpacity onPress={loadPriceHistory} style={styles.retryButton}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!data) return null;
+
+  const chartData = formatChartData();
+  const changeColor = getPriceChangeColor();
+
+  return (
+    <ScrollView style={styles.container}>
+      {/* Time Range Selector */}
+      <View style={styles.rangeSelector}>
+        {[30, 60, 90].map((days) => (
+          <TouchableOpacity
+            key={days}
+            onPress={() => setSelectedRange(days as TimeRange)}
+            style={[
+              styles.rangeButton,
+              selectedRange === days && styles.rangeButtonActive
+            ]}
+          >
+            <Text
+              style={[
+                styles.rangeButtonText,
+                selectedRange === days && styles.rangeButtonTextActive
+              ]}
+            >
+              {days}D
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Price Summary Cards */}
+      <View style={styles.summaryCards}>
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Current Price</Text>
+          <Text style={styles.cardValue}>
+            ${data.summary.current_price.toFixed(2)}
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Change</Text>
+          <Text style={[styles.cardValue, { color: changeColor }]}>
+            {data.summary.price_change.amount >= 0 ? '+' : ''}
+            ${data.summary.price_change.amount.toFixed(2)}
+          </Text>
+          <Text style={[styles.cardSubtext, { color: changeColor }]}>
+            ({data.summary.price_change.percentage.toFixed(1)}%)
+          </Text>
+        </View>
+      </View>
+
+      {/* Price Chart */}
+      {chartData && (
+        <LineChart
+          data={chartData}
+          width={350}
+          height={220}
+          chartConfig={{
+            backgroundColor: '#ffffff',
+            backgroundGradientFrom: '#ffffff',
+            backgroundGradientTo: '#ffffff',
+            decimalPlaces: 2,
+            color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            style: {
+              borderRadius: 16
+            },
+            propsForDots: {
+              r: '4',
+              strokeWidth: '2',
+              stroke: '#3B82F6'
+            }
+          }}
+          bezier
+          style={styles.chart}
+        />
+      )}
+
+      {/* Statistics */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Highest</Text>
+          <Text style={styles.statValue}>
+            ${data.summary.max_price.toFixed(2)}
+          </Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Lowest</Text>
+          <Text style={styles.statValue}>
+            ${data.summary.min_price.toFixed(2)}
+          </Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Average</Text>
+          <Text style={styles.statValue}>
+            ${data.summary.avg_price.toFixed(2)}
+          </Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Data Points</Text>
+          <Text style={styles.statValue}>
+            {data.summary.data_points}
+          </Text>
+        </View>
+      </View>
+
+      {/* Date Range */}
+      <Text style={styles.dateRange}>
+        {new Date(data.summary.date_range.start).toLocaleDateString()} -{' '}
+        {new Date(data.summary.date_range.end).toLocaleDateString()}
+      </Text>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    padding: 16
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666'
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  rangeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 8
+  },
+  rangeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8
+  },
+  rangeButtonActive: {
+    backgroundColor: '#3B82F6'
+  },
+  rangeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666'
+  },
+  rangeButtonTextActive: {
+    color: '#fff'
+  },
+  summaryCards: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20
+  },
+  card: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 4
+  },
+  cardLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4
+  },
+  cardValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111'
+  },
+  cardSubtext: {
+    fontSize: 14,
+    marginTop: 4
+  },
+  chart: {
+    marginVertical: 16,
+    borderRadius: 16
+  },
+  statsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6'
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666'
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111'
+  },
+  dateRange: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#999',
+    marginTop: 16,
+    marginBottom: 24
+  }
+});
+
+export default PriceHistoryScreen;
+
+// Helper function (implement based on your auth setup)
+async function getAuthToken(): Promise<string> {
+  // Your authentication token retrieval logic
+  return 'your-jwt-token-here';
+}
+```
+
+**Key Features:**
+- ✅ Toggle between 30/60/90 day views
+- ✅ Interactive price chart with smooth animations
+- ✅ Price change indicators (green/red)
+- ✅ High/Low/Average statistics
+- ✅ Error handling and retry logic
+- ✅ Loading states
+- ✅ Responsive layout
 
 ---
 
