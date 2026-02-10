@@ -13,8 +13,8 @@ export interface ImageProcessingResult {
 }
 
 export class ImageProcessor {
-  private readonly baseDir = '/var/www/sneaker-api/public/images/sneakers';
-  private readonly thumbDir = '/var/www/sneaker-api/public/images/sneakers/thumbs';
+  private readonly baseDir = process.env.HOME + '/images/sneakers';
+  private readonly thumbDir = process.env.HOME + '/images/sneakers/thumbs';
 
   /**
    * Initialize directories on startup

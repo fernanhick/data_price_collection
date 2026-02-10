@@ -95,7 +95,8 @@ app.get('/health', async (_req, res) => {
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
 // Serve product images
-app.use('/images', express.static('/var/www/sneaker-api/public/images'));
+const imagesPath = process.env.HOME + '/images';
+app.use('/images', express.static(imagesPath));
 
 // Auth routes (public - no JWT required)
 app.use('/api/auth', authRoutes);

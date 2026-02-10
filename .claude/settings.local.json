@@ -39,7 +39,9 @@
       "Bash(chmod:*)",
       "Bash(./test-api-endpoints.sh:*)",
       "mcp__plugin_claude-mem_mcp-search__save_memory",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm run images:backfill:*)",
+      "Bash(npm run sneaker:discover-safe:*)"
     ]
   }
 }
