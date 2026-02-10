@@ -34,6 +34,10 @@ export interface SKU {
   stockx_id?: string;
   goat_id?: string;
   ebay_query?: string;
+  image_url?: string;               // External URL from GOAT/StockX
+  image_local_path?: string;        // Local filesystem path to optimized image
+  image_downloaded_at?: Date;       // When image was downloaded
+  image_file_size?: number;         // File size in bytes
   created_at: Date;
   updated_at: Date;
 }

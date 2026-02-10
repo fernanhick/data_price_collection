@@ -1,6 +1,7 @@
 import { GoatScraper } from '../services/scrapers/goat.js';
 import { query, closePool } from '../db/index.js';
 import logger from '../utils/logger.js';
+import imageProcessor from '../services/imageProcessor.js';
 
 /**
  * SAFE sneaker discovery with aggressive rate limiting
@@ -169,8 +170,8 @@ async function discoverSneakersSafe() {
 
         const result = await query(
           `INSERT INTO skus (
-            sku_code, style_code, brand, model, colorway, tier, retail_price
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            sku_code, style_code, brand, model, colorway, tier, retail_price, image_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (style_code) DO NOTHING
           RETURNING id`,
           [
@@ -181,12 +182,47 @@ async function discoverSneakersSafe() {
             sneaker.colorway,
             sneaker.tier,
             sneaker.retail_price,
+            sneaker.image_url || null,  // Store external URL
           ],
         );
 
         if (result.rowCount && result.rowCount > 0) {
+          const skuId = result.rows[0].id;
           logger.info(`  ✅ ${sneaker.brand} ${sneaker.model} - ${sneaker.colorway}`);
           imported++;
+
+          // Download and optimize image if available
+          if (sneaker.image_url) {
+            const imageResult = await imageProcessor.downloadAndOptimize(
+              sneaker.image_url,
+              primaryStyleCode
+            );
+
+            if (imageResult) {
+              // Update database with local path
+              await query(
+                `UPDATE skus
+                 SET image_local_path = $1,
+                     image_file_size = $2,
+                     image_downloaded_at = NOW()
+                 WHERE id = $3`,
+                [imageResult.fullPath, imageResult.fileSize, skuId]
+              );
+
+              logger.info(
+                {
+                  styleCode: primaryStyleCode,
+                  path: imageResult.fullPath,
+                },
+                'Image downloaded and stored'
+              );
+            }
+
+            // Rate limiting: wait 2-3 seconds between image downloads (safe mode)
+            await new Promise(resolve =>
+              setTimeout(resolve, 2000 + Math.random() * 1000)
+            );
+          }
         } else {
           skipped++;
         }

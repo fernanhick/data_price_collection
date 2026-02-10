@@ -9,6 +9,7 @@ import { healthCheck, closePool } from './db/index.js';
 import { verifyConvexJWT } from './middleware/verifyJWT.js';
 import { verifyAdmin } from './middleware/verifyAdmin.js';
 import scheduler from './services/scheduler.js';
+import imageProcessor from './services/imageProcessor.js';
 
 // Import routes
 import priceRoutes from './routes/prices.js';
@@ -93,6 +94,9 @@ app.get('/health', async (_req, res) => {
 // Static files for admin dashboard
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
+// Serve product images
+app.use('/images', express.static('/var/www/sneaker-api/public/images'));
+
 // Auth routes (public - no JWT required)
 app.use('/api/auth', authRoutes);
 
@@ -138,6 +142,10 @@ async function start() {
       throw new Error('Database health check failed');
     }
     logger.info('✅ Database connection established');
+
+    // Initialize image processor directories
+    await imageProcessor.initialize();
+    logger.info('✅ Image processor initialized');
 
     // Start scheduler
     scheduler.startAll();

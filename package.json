@@ -22,6 +22,7 @@
     "sneaker:kicksdb": "tsx src/scripts/bulk-fetch-kicksdb.ts",
     "sneaker:kicksdb-all": "tsx src/scripts/fetch-all-kicksdb.ts",
     "sneaker:kicksdb-backfill": "tsx src/scripts/backfill-kicksdb-data.ts",
+    "images:backfill": "tsx src/scripts/backfill-images.ts",
     "prices:fetch": "tsx src/scripts/fetch-prices-manual.ts",
     "ecmv:backfill": "tsx src/scripts/backfill-price-history.ts",
     "scraper:test": "tsx src/scripts/test-scraper.ts",
@@ -51,6 +52,7 @@
     "pino-pretty": "^10.2.3",
     "puppeteer": "^24.36.1",
     "redis": "^4.6.0",
+    "sharp": "^0.34.5",
     "zod": "^3.22.0"
   },
   "devDependencies": {

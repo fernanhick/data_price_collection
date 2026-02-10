@@ -1,0 +1,160 @@
+================================================================================
+NON-FOOTWEAR PRODUCTS CLEANUP REPORT
+================================================================================
+
+Generated: 2026-02-09T01:16:40.029Z
+Total items flagged for removal: 101
+
+BREAKDOWN BY REASON:
+--------------------------------------------------------------------------------
+Category: collectibles: 30 items
+Keyword: hoodie (apparel): 27 items
+Keyword: beanie (accessory): 10 items
+Keyword: jacket (apparel): 7 items
+Keyword: tee (apparel): 7 items
+Keyword: sweatshirt (apparel): 6 items
+Keyword: backpack (accessory): 6 items
+Keyword: jersey (apparel): 3 items
+Keyword: t-shirt (apparel): 3 items
+Category: bags: 2 items
+
+BREAKDOWN BY BRAND:
+--------------------------------------------------------------------------------
+Supreme: 14 items
+Fear of God: 13 items
+Pop Mart: 13 items
+Nike: 8 items
+adidas: 7 items
+BAPE: 5 items
+Pokemon: 4 items
+Yeezy: 4 items
+Arc'teryx: 3 items
+Travis Scott: 3 items
+Canon: 2 items
+Gymshark: 2 items
+LEGO: 2 items
+Sonny Angel: 2 items
+Sprayground: 2 items
+The North Face: 2 items
+YoungLA: 2 items
+Alo Yoga: 1 items
+Bottega Veneta: 1 items
+Denim Tears: 1 items
+Funko: 1 items
+Jellycat: 1 items
+Miniso: 1 items
+Nintendo: 1 items
+NVIDIA: 1 items
+Rimowa: 1 items
+Starbucks: 1 items
+Syna: 1 items
+Topps: 1 items
+Vlone: 1 items
+
+DETAILED LIST OF ITEMS TO BE REMOVED:
+--------------------------------------------------------------------------------
+ID | Style Code | Brand | Model | Category | Reason
+--------------------------------------------------------------------------------
+1896   | HY5098               | adidas          | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1409   | KT3846               | adidas          | Jacket (Asian Sizing)          | streetwear      | Keyword: jacket (apparel)
+1233   | KR0294               | adidas          | Jacket (Asian Sizing)          | streetwear      | Keyword: jacket (apparel)
+1617   | KT3851               | adidas          | Jacket (Asian Sizing)          | streetwear      | Keyword: jacket (apparel)
+1273   | KR0295               | adidas          | Jacket (Asia Sizing)           | streetwear      | Keyword: jacket (apparel)
+1349   | KT3847               | adidas          | Jacket (Asia Sizing)           | streetwear      | Keyword: jacket (apparel)
+2139   | KT3437               | adidas          | Jersey                         | streetwear      | Keyword: jersey (apparel)
+1860   | P00969414            | Alo Yoga        | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1812   | arcteryx-bird-head-t | Arc'teryx       | Beanie                         | streetwear      | Keyword: beanie (accessory)
+1228   | X000006756           | Arc'teryx       | Beanie                         | streetwear      | Keyword: beanie (accessory)
+1899   | arcteryx-bird-head-t | Arc'teryx       | Beanie (FW25)                  | streetwear      | Keyword: beanie (accessory)
+1927   | bape-abc-camo-shark- | BAPE            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1747   | bape-color-camo-shar | BAPE            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1922   | bape-color-camo-shar | BAPE            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1722   | bape-abc-camo-shark- | BAPE            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+3135   | bape-a-bathing-ape-c | BAPE            | Tee                            | streetwear      | Keyword: tee (apparel)
+2643   | bottega-veneta-squar | Bottega Veneta  | Square Rectangle Sunglasses    | handbags        | Category: bags
+1480   | canon-powershot-g7-x | Canon           | 3637C001 (US Plug)             | collectibles    | Category: collectibles
+2729   | canon-powershot-g7-x | Canon           | 3638C001                       | collectibles    | Category: collectibles
+1918   | denim-tears-the-cott | Denim Tears     | Sweatshirt                     | streetwear      | Keyword: sweatshirt (apparel)
+2155   | 125SP232000F         | Fear of God     | Arch Logo Tee                  | streetwear      | Keyword: tee (apparel)
+1232   | 192HO246210F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2032   | 192HO246254F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2152   | 192HO246257F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1253   | 192BT232050F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1440   | fear-of-god-essentia | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1738   | 192SP242050F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2879   | fear-of-god-essentia | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1353   | 192HO246258F         | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1548   | fear-of-god-essentia | Fear of God     | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2973   | fear-of-god-essentia | Fear of God     | Hoodie (FW23)                  | streetwear      | Keyword: hoodie (apparel)
+1323   | 192HO246259F         | Fear of God     | Hoodie (FW24)                  | streetwear      | Keyword: hoodie (apparel)
+1259   | 192HO246250F         | Fear of God     | Hoodie (FW24)                  | streetwear      | Keyword: hoodie (apparel)
+3024   | funko-pop-animation- | Funko           | Figure #2019                   | collectibles    | Category: collectibles
+1885   | A6A4C-BB24           | Gymshark        | T-shirt                        | streetwear      | Keyword: t-shirt (apparel)
+3140   | gymshark-onyx-50-sea | Gymshark        | T-shirt                        | streetwear      | Keyword: t-shirt (apparel)
+1507   | jellycat-heart-drago | Jellycat        | Plush                          | collectibles    | Category: collectibles
+1822   | lego-stranger-things | LEGO            | Set 11370                      | collectibles    | Category: collectibles
+2350   | lego-harry-potter-gr | LEGO            | Set 76417                      | collectibles    | Category: collectibles
+3083   | miniso-top-toy-jujut | Miniso          | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+1544   | DX9786-100           | Nike            | Backpack                       | streetwear      | Keyword: backpack (accessory)
+1682   | HM9965-010           | Nike            | Backpack                       | streetwear      | Keyword: backpack (accessory)
+2163   | BA5554-011           | Nike            | Backpack                       | streetwear      | Keyword: backpack (accessory)
+1750   | FB7921-010           | Nike            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2131   | HV0949-011           | Nike            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2097   | FB7921-063           | Nike            | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1979   | HV0949-063           | Nike            | Hoodie (FW24)                  | streetwear      | Keyword: hoodie (apparel)
+2113   | HV0949-010           | Nike            | Hoodie (FW24)                  | streetwear      | Keyword: hoodie (apparel)
+3028   | nintendo-switch-2-ma | Nintendo        | 6614325 (US Plug)              | collectibles    | Category: collectibles
+2811   | nvidia-geforce-rtx-5 | NVIDIA          | 900-1G144-2530-000             | collectibles    | Category: collectibles
+3183   | 2025-pokemon-mega-ev | Pokemon         | 2025 Pokémon Mega Evolution    | collectibles    | Category: collectibles
+3127   | 2025-pokemon-mega-ev | Pokemon         | 2025 Pokémon Mega Evolution    | collectibles    | Category: collectibles
+3026   | 2025-pokemon-mega-ev | Pokemon         | 2025 Pokémon Mega Evolution    | collectibles    | Category: collectibles
+2410   | 2025-pokemon-mega-ev | Pokemon         | 2025 Pokémon Mega Evolution    | collectibles    | Category: collectibles
+3004   | pop-mart-have-a-good | Pop Mart        | Plush Pendant                  | collectibles    | Category: collectibles
+3013   | pop-mart-skullpanda- | Pop Mart        | Plush Pendant                  | collectibles    | Category: collectibles
+2575   | pop-mart-the-monster | Pop Mart        | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2257   | pop-mart-labubu-the- | Pop Mart        | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2745   | pop-mart-labubu-the- | Pop Mart        | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2849   | pop-mart-labubu-the- | Pop Mart        | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2842   | pop-mart-x-bikini-bo | Pop Mart        | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2440   | pop-mart-labubu-the- | Pop Mart        | Sealed Case (6 Blind Boxes)    | collectibles    | Category: collectibles
+2549   | pop-mart-disney-mick | Pop Mart        | Sealed Case (8 Blind Box)      | collectibles    | Category: collectibles
+2277   | pop-mart-labubu-the- | Pop Mart        | Unsealed Case (14 Blind Box)   | collectibles    | Category: collectibles
+2576   | pop-mart-the-monster | Pop Mart        | Vinyl Plush Doll               | collectibles    | Category: collectibles
+2754   | pop-mart-labubu-the- | Pop Mart        | Vinyl Plush Doll               | collectibles    | Category: collectibles
+2380   | pop-mart-labubu-the- | Pop Mart        | Vinyl Plush Pendant            | collectibles    | Category: collectibles
+3084   | rimowa-iphone-17-pro | Rimowa          | iPhone 17 Pro Max MagSafe-comp | handbags        | Category: bags
+2451   | sonny-angel-strawber | Sonny Angel     | Sealed Case (6 Blind Box)      | collectibles    | Category: collectibles
+2627   | sonny-angel-strawber | Sonny Angel     | Single Blind Box               | collectibles    | Category: collectibles
+1673   | 910B6039NSZ          | Sprayground     | Backpack                       | streetwear      | Keyword: backpack (accessory)
+2111   | 910B6362NSZ          | Sprayground     | Backpack                       | streetwear      | Keyword: backpack (accessory)
+1351   | starbucks-bear-glass | Starbucks       | Glass Tumbler Cup              | collectibles    | Category: collectibles
+1838   | supreme-backpack-ss2 | Supreme         | Backpack (SS25)                | streetwear      | Keyword: backpack (accessory)
+2182   | supreme-marmot-base- | Supreme         | Beanie                         | streetwear      | Keyword: beanie (accessory)
+1441   | supreme-hand-tied-be | Supreme         | Beanie                         | streetwear      | Keyword: beanie (accessory)
+1642   | supreme-new-era-box- | Supreme         | Beanie (FW24)                  | streetwear      | Keyword: beanie (accessory)
+1840   | supreme-new-era-box- | Supreme         | Beanie (FW24)                  | streetwear      | Keyword: beanie (accessory)
+1527   | supreme-big-logo-bea | Supreme         | Beanie (FW25)                  | streetwear      | Keyword: beanie (accessory)
+3052   | supreme-new-era-box- | Supreme         | Beanie (FW25)                  | streetwear      | Keyword: beanie (accessory)
+1912   | supreme-bones-footba | Supreme         | Jersey                         | streetwear      | Keyword: jersey (apparel)
+1898   | supreme-box-logo-hoo | Supreme         | Sweatshirt (FW25)              | streetwear      | Keyword: sweatshirt (apparel)
+1476   | supreme-box-logo-hoo | Supreme         | Sweatshirt (FW25)              | streetwear      | Keyword: sweatshirt (apparel)
+1760   | supreme-box-logo-hoo | Supreme         | Sweatshirt (FW25)              | streetwear      | Keyword: sweatshirt (apparel)
+2622   | supreme-box-logo-hoo | Supreme         | Sweatshirt (FW25)              | streetwear      | Keyword: sweatshirt (apparel)
+2367   | supreme-box-logo-hoo | Supreme         | Sweatshirt (FW25)              | streetwear      | Keyword: sweatshirt (apparel)
+2091   | supreme-playboi-cart | Supreme         | Tee                            | streetwear      | Keyword: tee (apparel)
+2086   | syna-world-og-syna-s | Syna            | Beanie                         | streetwear      | Keyword: beanie (accessory)
+2203   | NF0A3C8DLE41/NF0A3C8 | The North Face  | Jacket                         | streetwear      | Keyword: jacket (apparel)
+1916   | NF0A3XEO             | The North Face  | Jacket                         | streetwear      | Keyword: jacket (apparel)
+2118   | 2025-25-topps-midnig | Topps           | 2025-25 Topps Midnight         | collectibles    | Category: collectibles
+2582   | travis-scott-x-nike- | Travis Scott    | Jersey                         | streetwear      | Keyword: jersey (apparel)
+2598   | travis-scott-cj-x-au | Travis Scott    | Tee                            | streetwear      | Keyword: tee (apparel)
+3180   | travis-scott-cactus- | Travis Scott    | Tee                            | streetwear      | Keyword: tee (apparel)
+2167   | vlone-x-never-broke- | Vlone           | T-shirt                        | streetwear      | Keyword: t-shirt (apparel)
+1643   | yeezy-x-gap-hoodie-b | Yeezy           | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1783   | 701377 03            | Yeezy           | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1596   | 4708240620000        | Yeezy           | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+2133   | 701377 07            | Yeezy           | Hoodie                         | streetwear      | Keyword: hoodie (apparel)
+1535   | youngla-x-batman-com | YoungLA         | Tee                            | streetwear      | Keyword: tee (apparel)
+1983   | youngla-x-batman-com | YoungLA         | Tee                            | streetwear      | Keyword: tee (apparel)
+
+================================================================================

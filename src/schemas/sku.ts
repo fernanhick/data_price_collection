@@ -16,6 +16,8 @@ export const CreateSKUSchema = z.object({
   stockx_id: z.string().max(100).optional().nullable(),
   goat_id: z.string().max(100).optional().nullable(),
   ebay_query: z.string().max(255).optional().nullable(),
+  image_url: z.string().url().max(500).optional().nullable(),
+  image_local_path: z.string().max(255).optional().nullable(),
 });
 
 /**
@@ -35,6 +37,8 @@ export const UpdateSKUSchema = z.object({
   stockx_id: z.string().max(100).optional().nullable(),
   goat_id: z.string().max(100).optional().nullable(),
   ebay_query: z.string().max(255).optional().nullable(),
+  image_url: z.string().url().max(500).optional().nullable(),
+  image_local_path: z.string().max(255).optional().nullable(),
 });
 
 export type CreateSKUInput = z.infer<typeof CreateSKUSchema>;

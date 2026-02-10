@@ -32,7 +32,14 @@
       "Bash(sudo tee:*)",
       "Bash(sudo apt update:*)",
       "Bash(sudo apt install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(pm2 restart:*)",
+      "Bash(tsx:*)",
+      "Bash(pm2 list:*)",
+      "Bash(chmod:*)",
+      "Bash(./test-api-endpoints.sh:*)",
+      "mcp__plugin_claude-mem_mcp-search__save_memory",
+      "WebSearch"
     ]
   }
 }
