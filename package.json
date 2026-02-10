@@ -28,7 +28,8 @@
     "ecmv:backfill": "tsx src/scripts/backfill-price-history.ts",
     "scraper:test": "tsx src/scripts/test-scraper.ts",
     "scraper:test-stylecode": "tsx src/scripts/test-stylecode.ts",
-    "admin:create-user": "tsx scripts/create-admin-user.ts"
+    "admin:create-user": "tsx scripts/create-admin-user.ts",
+    "migrate:backup": "bash scripts/migrate-to-vps.sh"
   },
   "keywords": [
     "sneaker",
