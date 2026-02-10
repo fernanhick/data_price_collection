@@ -41,7 +41,8 @@
       "mcp__plugin_claude-mem_mcp-search__save_memory",
       "WebSearch",
       "Bash(npm run images:backfill:*)",
-      "Bash(npm run sneaker:discover-safe:*)"
+      "Bash(npm run sneaker:discover-safe:*)",
+      "Bash(ITERATIONS=11 npm run images:backfill-batch:*)"
     ]
   }
 }
