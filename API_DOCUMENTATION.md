@@ -11,11 +11,13 @@
   - [Health Check](#health-check)
   - [Authentication](#authentication-endpoints)
   - [SKUs (Sneaker Catalog)](#skus-endpoints)
+  - [Images](#image-endpoints)
   - [Prices](#price-endpoints)
   - [Analytics](#analytics-endpoints)
   - [Admin (Protected)](#admin-endpoints)
 - [Data Models](#data-models)
 - [Examples](#examples)
+- [Image Implementation Guide](#image-implementation-guide)
 
 ---
 
@@ -38,9 +40,20 @@ The Sneaker Price API provides real-time footwear market data aggregated from mu
 ```
 Production: https://api.sneakersbook.com
 Development: http://localhost:3000
+             http://[::1]:3000                (IPv6 localhost)
+             http://192.168.1.73:3000         (Local IPv4)
+             http://[2a0e:1d47:8685:5500::3d]:3000  (Public IPv6)
 ```
 
 All endpoints are prefixed with `/api` unless otherwise noted.
+
+### Network Configuration
+
+**Dual-Stack Support (IPv4 + IPv6):**
+- API server listens on all interfaces via IPv6 wildcard address (`::`)
+- Supports both IPv4 and IPv6 clients simultaneously
+- IPv4 clients connect via IPv4-mapped IPv6 addresses (transparent to client)
+- Optimal for modern networks and CGNAT bypass scenarios
 
 ---
 
@@ -221,7 +234,9 @@ Search and list footwear products in the catalog.
       "model": "Air Jordan 1 Retro High OG",
       "colorway": "Shadow",
       "retail_price": 170.00,
-      "tier": 1
+      "tier": 1,
+      "image_url": "/images/sneakers/555088-001.webp",
+      "image_thumbnail_url": "/images/sneakers/thumbs/555088-001.webp"
     }
   ]
 }
@@ -267,6 +282,8 @@ Get lightweight catalog for autocomplete/selection (optimized for mobile).
       "style_code": "555088-001",
       "retail_price": 170.00,
       "tier": 1,
+      "image_url": "/images/sneakers/555088-001.webp",
+      "image_thumbnail_url": "/images/sneakers/thumbs/555088-001.webp",
       "display_name": "Nike Air Jordan 1 Retro High OG - Shadow"
     }
   ]
@@ -353,6 +370,67 @@ Get detailed information for a single SKU including current price.
 **Error Responses:**
 - `400`: Invalid SKU ID
 - `404`: SKU not found
+
+---
+
+### Image Endpoints
+
+#### Image Serving (Static Files)
+
+Product images are served automatically as static files. All images are included in SKU API responses via `image_url` and `image_thumbnail_url` fields.
+
+**Image URL Structure:**
+```
+/images/sneakers/{filename}.webp           # Full-size image (600x600)
+/images/sneakers/thumbs/{filename}.webp    # Thumbnail (200x200)
+```
+
+**Image Specifications:**
+| Property | Value |
+|----------|-------|
+| Format | WebP (modern, optimized format) |
+| Full Size | 600x600 pixels, 80% quality, ~15-20 KB |
+| Thumbnail | 200x200 pixels, 75% quality, ~5-8 KB |
+| Coverage | 1,082 of 1,116 sneakers (97%) |
+
+**Usage in Frontend:**
+
+Simply use the `image_url` and `image_thumbnail_url` from SKU responses:
+
+```javascript
+// From /api/skus or /api/skus/catalog responses:
+const thumbnailSrc = `https://api.sneakersbook.com${sneaker.image_thumbnail_url}`;
+const fullImageSrc = `https://api.sneakersbook.com${sneaker.image_url}`;
+```
+
+**Examples:**
+
+Full-size image:
+```
+https://api.sneakersbook.com/images/sneakers/555088-001.webp
+```
+
+Thumbnail image:
+```
+https://api.sneakersbook.com/images/sneakers/thumbs/555088-001.webp
+```
+
+**Notes:**
+- Images are optimized and cached locally on the server
+- All API responses for SKUs automatically include image URLs
+- If `image_url` is `null`, the image is being processed or unavailable
+- Thumbnails should be used for lists and grids for better performance
+- Full images are ideal for product detail pages
+- Use lazy loading in frontend for better performance
+
+**Implementation Tips:**
+1. Always use `image_thumbnail_url` for lists/grids
+2. Implement lazy loading with `loading="lazy"` attribute
+3. Add error handling for broken images with fallback placeholders
+4. Cache images locally in your app when possible
+5. Use responsive image sizing for different device types
+
+**See Also:** [IMAGE-IMPLEMENTATION-GUIDE.md](./IMAGE-IMPLEMENTATION-GUIDE.md) for comprehensive frontend examples (React, Vue, vanilla JS)
 
 ---
 
@@ -1161,7 +1239,9 @@ curl -X GET "https://api.sneakersbook.com/api/skus?search=Jordan%201&limit=5" \
       "model": "Air Jordan 1 Retro High OG",
       "colorway": "Shadow",
       "retail_price": 170.00,
-      "tier": 1
+      "tier": 1,
+      "image_url": "/images/sneakers/555088-001.webp",
+      "image_thumbnail_url": "/images/sneakers/thumbs/555088-001.webp"
     }
   ]
 }
@@ -1245,6 +1325,8 @@ curl -X GET "https://api.sneakersbook.com/api/skus/catalog?search=dunk&limit=10"
       "style_code": "DV0833-101",
       "retail_price": 115.00,
       "tier": 2,
+      "image_url": "/images/sneakers/DV0833-101.webp",
+      "image_thumbnail_url": "/images/sneakers/thumbs/DV0833-101.webp",
       "display_name": "Nike Dunk Low - Team Green"
     }
   ]
@@ -1840,6 +1922,36 @@ async function getAuthToken(): Promise<string> {
 
 ---
 
+## Image Implementation Guide
+
+Complete guides for implementing product images in your frontend application:
+
+**📖 See: [IMAGE-IMPLEMENTATION-GUIDE.md](./IMAGE-IMPLEMENTATION-GUIDE.md)**
+
+This document includes:
+- ✅ How to obtain images from the API
+- ✅ Frontend implementation examples (React, Vue, vanilla JavaScript)
+- ✅ Best practices for image loading and caching
+- ✅ Lazy loading and performance optimization
+- ✅ Error handling and fallback strategies
+- ✅ Mobile app recommendations
+- ✅ Responsive image sizing
+
+**Quick Start:**
+```javascript
+// Get sneaker with image
+const sneaker = await fetch('/api/skus/catalog?search=jordan')
+  .then(r => r.json());
+
+// Use thumbnail for lists
+<img src={`https://api.sneakersbook.com${sneaker.image_thumbnail_url}`} />
+
+// Use full image for details
+<img src={`https://api.sneakersbook.com${sneaker.image_url}`} />
+```
+
+---
+
 ## Notes for Mobile Development
 
 ### Best Practices
@@ -1879,12 +1991,36 @@ async function getAuthToken(): Promise<string> {
 
 ---
 
+## Recent Updates
+
+### February 11, 2026
+
+**Network Configuration:**
+- ✅ API now supports dual-stack IPv4+IPv6 networking
+- ✅ Single listening socket accepts both IPv4 and IPv6 connections
+- ✅ Server binds to `::` (IPv6 wildcard) for universal accessibility
+- ✅ Optimal for CGNAT bypass and mobile app connectivity
+
+**Image Serving:**
+- ✅ 1,082 product images now available via `/images/` endpoint
+- ✅ Automatic `image_url` and `image_thumbnail_url` in all SKU responses
+- ✅ WebP format optimized for web (15-20 KB full, 5-8 KB thumbnail)
+- ✅ Comprehensive IMAGE-IMPLEMENTATION-GUIDE.md for frontend development
+
+**Documentation:**
+- ✅ Updated API_DOCUMENTATION.md with image endpoints and examples
+- ✅ New IMAGE-IMPLEMENTATION-GUIDE.md with React, Vue, and vanilla JS examples
+- ✅ Added network configuration details for IPv6 dual-stack support
+
+---
+
 ## Support
 
 For API support, issues, or feature requests:
 - GitHub: https://github.com/fernanhick/data_price_collection
-- Documentation updates: Check repository for latest changes
+- Documentation: Check repository for latest guides and examples
+- Image Implementation: See [IMAGE-IMPLEMENTATION-GUIDE.md](./IMAGE-IMPLEMENTATION-GUIDE.md)
 
-**Last Updated:** February 9, 2026
-**API Version:** 1.0
+**Last Updated:** February 11, 2026
+**API Version:** 1.0 (Dual-Stack + Image Support)
 **Maintained by:** data_price_collection team
