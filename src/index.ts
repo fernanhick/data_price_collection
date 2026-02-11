@@ -152,11 +152,11 @@ async function start() {
     scheduler.startAll();
 
     // Start server - listen on all interfaces (IPv4 and IPv6)
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '::', () => {
       logger.info(`🚀 Server running on http://localhost:${PORT}`);
       logger.info(`Environment: ${config.nodeEnv}`);
       logger.info(`API Base: ${config.apiBaseUrl}`);
-      logger.info(`Listening on all interfaces (IPv4 and IPv6)`);
+      logger.info(`Listening on all interfaces (IPv4 and IPv6 dual-stack)`);
     });
   } catch (error) {
     logger.error({ error }, 'Failed to start server');
