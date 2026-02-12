@@ -19,6 +19,7 @@
     "sneaker:discover": "tsx src/scripts/discover-sneakers.ts",
     "sneaker:discover-safe": "tsx src/scripts/discover-sneakers-safe.ts",
     "sneaker:discover-mega": "tsx src/scripts/discover-sneakers-mega.ts",
+    "discover:comprehensive": "tsx src/scripts/discover-sneakers-comprehensive.ts",
     "discovery:full": "tsx src/scripts/full-discovery-with-prices.ts",
     "sneaker:kicksdb": "tsx src/scripts/bulk-fetch-kicksdb.ts",
     "sneaker:kicksdb-all": "tsx src/scripts/fetch-all-kicksdb.ts",
