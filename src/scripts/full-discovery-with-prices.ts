@@ -513,7 +513,7 @@ async function printFinalReport() {
 async function main() {
   try {
     // Phase 1: Discovery
-    const { imported, skipped, skus } = await discoverSneakers();
+    const { imported: _imported, skipped: _skipped, skus } = await discoverSneakers();
 
     if (skus.length === 0) {
       logger.warn('No new sneakers to fetch prices for');
@@ -522,7 +522,7 @@ async function main() {
     }
 
     // Phase 2: Fetch prices for new sneakers
-    const priceResults = await fetchPricesForNewSneakers(skus);
+    await fetchPricesForNewSneakers(skus);
 
     // Phase 3: Report
     await printFinalReport();
