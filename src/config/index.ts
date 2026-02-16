@@ -59,6 +59,11 @@ const config: AppConfig = {
   admin: {
     userIds: process.env.ADMIN_USER_IDS?.split(',').map((id) => id.trim()) || [],
   },
+  s3: {
+    bucket: process.env.S3_BUCKET || '',
+    region: process.env.S3_REGION || 'eu-north-1',
+    cloudfrontUrl: process.env.CLOUDFRONT_URL || '',
+  },
 };
 
 // Validate required config

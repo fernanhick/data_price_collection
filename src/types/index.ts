@@ -216,4 +216,9 @@ export interface AppConfig {
   admin: {
     userIds: string[];
   };
+  s3: {
+    bucket: string;
+    region: string;
+    cloudfrontUrl: string;
+  };
 }

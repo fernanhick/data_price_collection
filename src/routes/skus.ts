@@ -116,7 +116,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         colorway: sku.colorway,
         retail_price: sku.retail_price,
         tier: sku.tier,
-        image_url: sku.image_local_path || sku.image_url,  // Prefer local, fallback to external
+        image_url: sku.image_local_path || sku.image_url,
         image_thumbnail_url: sku.image_local_path
           ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
           : null,
@@ -191,7 +191,7 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
         style_code: sku.style_code,
         retail_price: sku.retail_price,
         tier: sku.tier,
-        image_url: sku.image_local_path || sku.image_url,  // Prefer local, fallback to external
+        image_url: sku.image_local_path || sku.image_url,
         image_thumbnail_url: sku.image_local_path
           ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
           : null,

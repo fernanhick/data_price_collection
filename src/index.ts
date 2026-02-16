@@ -94,9 +94,11 @@ app.get('/health', async (_req, res) => {
 // Static files for admin dashboard
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
-// Serve product images
-const imagesPath = process.env.HOME + '/images';
-app.use('/images', express.static(imagesPath));
+// Serve product images locally (skip when using S3)
+if (!config.s3.bucket) {
+  const imagesPath = process.env.HOME + '/images';
+  app.use('/images', express.static(imagesPath));
+}
 
 // Auth routes (public - no JWT required)
 app.use('/api/auth', authRoutes);
