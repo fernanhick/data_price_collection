@@ -12,7 +12,7 @@ import scheduler from './services/scheduler.js';
 import imageProcessor from './services/imageProcessor.js';
 
 // Import routes
-import priceRoutes from './routes/prices.js';
+import priceRoutes, { batchRouter as priceBatchRoutes } from './routes/prices.js';
 import skuRoutes from './routes/skus.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
@@ -100,8 +100,9 @@ if (!config.s3.bucket) {
   app.use('/images', express.static(imagesPath));
 }
 
-// Auth routes (public - no JWT required)
+// Public routes (no JWT required)
 app.use('/api/auth', authRoutes);
+app.use('/api/prices', priceBatchRoutes);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);

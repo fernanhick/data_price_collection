@@ -6,6 +6,107 @@ import { SKU, PriceResponse } from '../types/index.js';
 
 const router = Router();
 
+const MAX_BATCH_SIZE = 50;
+
+/**
+ * POST /api/prices/batch (public - no auth required)
+ * Get current ECMV and price breakdown for multiple sneakers at once
+ * Body: { style_codes: ["DD1391-100", "CW2288-111", ...] }
+ */
+export const batchRouter = Router();
+batchRouter.post('/batch', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { style_codes } = req.body;
+
+    if (!Array.isArray(style_codes) || style_codes.length === 0) {
+      res.status(400).json({ error: 'style_codes must be a non-empty array' });
+      return;
+    }
+
+    if (style_codes.length > MAX_BATCH_SIZE) {
+      res.status(400).json({ error: `Maximum ${MAX_BATCH_SIZE} style codes per request` });
+      return;
+    }
+
+    // Validate all codes are strings
+    if (!style_codes.every((c: any) => typeof c === 'string' && c.length > 0)) {
+      res.status(400).json({ error: 'All style_codes must be non-empty strings' });
+      return;
+    }
+
+    logger.info({ count: style_codes.length }, 'Batch price lookup');
+
+    // Fetch all matching SKUs in one query
+    const placeholders = style_codes.map((_: string, i: number) => `$${i + 1}`).join(', ');
+    const skuResult = await dbQuery<SKU>(
+      `SELECT * FROM skus WHERE style_code IN (${placeholders})`,
+      style_codes,
+    );
+
+    const skuMap = new Map(skuResult.rows.map((s: SKU) => [s.style_code, s]));
+
+    // Fetch latest price_history for all found SKUs in one query
+    const skuIds = skuResult.rows.map((s: SKU) => s.id);
+    let priceMap = new Map<number, any>();
+
+    if (skuIds.length > 0) {
+      const idPlaceholders = skuIds.map((_: number, i: number) => `$${i + 1}`).join(', ');
+      const historyResult = await dbQuery(
+        `SELECT DISTINCT ON (sku_id) *
+         FROM price_history
+         WHERE sku_id IN (${idPlaceholders})
+         ORDER BY sku_id, timestamp DESC`,
+        skuIds,
+      );
+      priceMap = new Map(historyResult.rows.map((h: any) => [h.sku_id, h]));
+    }
+
+    // Build response for each requested style code
+    const results: Record<string, PriceResponse | { error: string }> = {};
+
+    for (const code of style_codes) {
+      const sku = skuMap.get(code);
+      if (!sku) {
+        results[code] = { error: 'SKU not found' };
+        continue;
+      }
+
+      const priceData = priceMap.get(sku.id);
+      if (!priceData) {
+        results[code] = { error: 'No price data available' };
+        continue;
+      }
+
+      results[code] = {
+        style_code: sku.style_code,
+        ecmv: priceData.ecmv,
+        confidence: priceData.confidence,
+        last_updated: priceData.timestamp,
+        components: priceData.components,
+      };
+    }
+
+    // Log API usage
+    try {
+      await dbQuery(
+        `INSERT INTO api_usage (user_id, endpoint, method, status_code, timestamp)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [null, '/api/prices/batch', 'POST', 200, new Date()],
+      );
+    } catch (error) {
+      logger.debug({ error }, 'Failed to log API usage');
+    }
+
+    res.json({
+      count: Object.keys(results).length,
+      results,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed batch price lookup');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /**
  * GET /api/prices/:style_code
  * Get current ECMV and price breakdown for a sneaker
