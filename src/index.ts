@@ -17,6 +17,7 @@ import skuRoutes from './routes/skus.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import authRoutes from './routes/auth.js';
+import catalogRoutes from './routes/catalog.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -103,6 +104,7 @@ if (!config.s3.bucket) {
 // Public routes (no JWT required)
 app.use('/api/auth', authRoutes);
 app.use('/api/prices', priceBatchRoutes);
+app.use('/api/catalog', catalogRoutes);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);
