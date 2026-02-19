@@ -83,7 +83,7 @@ router.post('/submissions', verifySecret, async (req: Request, res: Response) =>
           brand,
           model,
           colorway,
-          'TIER_3',
+          3,
           (marketData as any)?.retailPriceCents
             ? Math.round((marketData as any).retailPriceCents / 100)
             : null,
