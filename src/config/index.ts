@@ -4,13 +4,23 @@ import { AppConfig } from '../types/index.js';
 // Load environment variables
 dotenv.config();
 
+// Select database based on DB_TARGET: 'local' (default) or 'ec2'
+const dbTarget = process.env.DB_TARGET || 'local';
+const databaseUrl = dbTarget === 'ec2'
+  ? (process.env.DATABASE_URL_EC2 || process.env.DATABASE_URL || 'postgresql://localhost/sneaker_prices')
+  : (process.env.DATABASE_URL_LOCAL || process.env.DATABASE_URL || 'postgresql://localhost/sneaker_prices');
+
+if (dbTarget !== 'local') {
+  console.log(`🎯 Database target: ${dbTarget}`);
+}
+
 const config: AppConfig = {
   nodeEnv: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
   port: parseInt(process.env.PORT || '3000', 10),
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
 
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://localhost/sneaker_prices',
+    url: databaseUrl,
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
     name: process.env.DB_NAME || 'sneaker_prices',

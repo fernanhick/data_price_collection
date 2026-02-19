@@ -32,7 +32,16 @@
     "scraper:test": "tsx src/scripts/test-scraper.ts",
     "scraper:test-stylecode": "tsx src/scripts/test-stylecode.ts",
     "admin:create-user": "tsx scripts/create-admin-user.ts",
-    "migrate:backup": "bash scripts/migrate-to-vps.sh"
+    "migrate:backup": "bash scripts/migrate-to-vps.sh",
+
+    "--- EC2 SCRIPTS (prefix any script with DB_TARGET=ec2) ---": "",
+    "ec2:discover": "DB_TARGET=ec2 tsx src/scripts/discover-sneakers-by-brand.ts",
+    "ec2:discover-mega": "DB_TARGET=ec2 tsx src/scripts/discover-sneakers-mega.ts",
+    "ec2:discover-full": "DB_TARGET=ec2 tsx src/scripts/full-discovery-with-prices.ts",
+    "ec2:prices": "DB_TARGET=ec2 tsx src/scripts/fetch-prices-manual.ts",
+    "ec2:images": "DB_TARGET=ec2 tsx src/scripts/backfill-images-batch.ts",
+    "ec2:migrate": "DB_TARGET=ec2 tsx src/scripts/migrate.ts",
+    "ec2:seed": "DB_TARGET=ec2 tsx src/scripts/seed.ts"
   },
   "keywords": [
     "sneaker",

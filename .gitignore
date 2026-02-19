@@ -43,3 +43,9 @@ temp/
 
 # Development keys (DO NOT COMMIT)
 scripts/.dev-keys/
+
+# AWS / Sensitive files
+*.pem
+*.sql
+.env.remote
+awscliv2.zip
