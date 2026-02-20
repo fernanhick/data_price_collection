@@ -95,8 +95,9 @@ export class PriceFetcher {
     try {
       logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching GOAT prices');
 
-      // Prefer style code, then custom ID, then build from SKU data
-      const query = sku.style_code || sku.goat_id || this.buildSearchQuery(sku);
+      // Strip hyphens and spaces so "DV3054-001", "DV3054 001", "DV3054001" all resolve correctly
+      const styleCodeStripped = sku.style_code?.replace(/[-\s]/g, '');
+      const query = styleCodeStripped || sku.goat_id || this.buildSearchQuery(sku);
 
       // Search GOAT
       const listing = await this.goatScraper.getPriceForSku(query);
@@ -149,8 +150,9 @@ export class PriceFetcher {
     try {
       logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching StockX prices');
 
-      // Prefer style code, then custom ID, then build from SKU data
-      const query = sku.style_code || sku.stockx_id || this.buildSearchQuery(sku);
+      // Strip hyphens and spaces so "DV3054-001", "DV3054 001", "DV3054001" all resolve correctly
+      const styleCodeStripped = sku.style_code?.replace(/[-\s]/g, '');
+      const query = styleCodeStripped || sku.stockx_id || this.buildSearchQuery(sku);
 
       // Search StockX
       const listing = await this.stockxScraper.getPriceForSku(query);

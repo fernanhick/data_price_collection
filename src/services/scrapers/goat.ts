@@ -85,10 +85,10 @@ export class GoatScraper {
     try {
       const listings = await this.searchProducts(sku, 5);
 
-      // Find exact SKU match
-      const exactMatch = listings.find(
-        (l) => l.sku.replace(/\s/g, '').toLowerCase() === sku.replace(/\s/g, '').toLowerCase(),
-      );
+      // Find exact SKU match — strip both spaces and hyphens for comparison
+      // so "1201A482-102", "1201A482 102", and "1201A482102" all match
+      const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+      const exactMatch = listings.find((l) => normalize(l.sku) === normalize(sku));
 
       if (exactMatch) {
         return exactMatch;
