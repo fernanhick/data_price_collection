@@ -283,10 +283,10 @@ router.post('/submissions', verifySecret, async (req: Request, res: Response) =>
       }
 
       priceFetcher
-        .fetchFastPricesForSku(newSku)
+        .fetchAllPricesForSku(newSku)
         .then((results) => {
           console.log(
-            `[CatalogReview] Prices fetched for ${canonicalStyleCode} — eBay: ${results.ebay.success}, GOAT: ${results.goat.success}`,
+            `[CatalogReview] Prices fetched for ${canonicalStyleCode} — eBay: ${results.ebay.success}, GOAT: ${results.goat.success}, StockX: ${results.stockx.success}`,
           );
         })
         .catch((err) => console.warn(`[CatalogReview] Price fetch failed for ${canonicalStyleCode}:`, err));
