@@ -43,7 +43,8 @@
       "Bash(npm run images:backfill:*)",
       "Bash(npm run sneaker:discover-safe:*)",
       "Bash(ITERATIONS=11 npm run images:backfill-batch:*)",
-      "Bash(DB_TARGET=ec2 npx tsx:*)"
+      "Bash(DB_TARGET=ec2 npx tsx:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
