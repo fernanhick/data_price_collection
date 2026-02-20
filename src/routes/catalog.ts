@@ -14,6 +14,21 @@ const goatScraper = new GoatScraper();
 const stockxScraper = new StockxScraper();
 const priceFetcher = new PriceFetcher();
 
+// ── Brand normalization ───────────────────────────────────────────────────────
+// Canonical brand names as returned by GOAT (the primary source of truth).
+// Add entries here whenever a new inconsistency is discovered.
+const BRAND_CANONICAL: Record<string, string> = {
+  adidas: 'adidas',
+  Adidas: 'adidas',
+  ADIDAS: 'adidas',
+  Asics: 'ASICS',
+  asics: 'ASICS',
+};
+
+function normalizeBrand(brand: string): string {
+  return BRAND_CANONICAL[brand] ?? brand;
+}
+
 // ── Marketplace abstraction ───────────────────────────────────────────────────
 // Adding a new platform: implement lookup below and add to PLATFORMS array.
 
@@ -34,7 +49,7 @@ async function lookupGoat(styleCode: string): Promise<MarketplaceResult | null> 
   if (!listing) return null;
   return {
     platform: 'GOAT',
-    brand: listing.brand,
+    brand: normalizeBrand(listing.brand),
     colorway: listing.colorway,
     productName: listing.name,
     retailPrice: listing.retailPriceCents ? Math.round(listing.retailPriceCents / 100) : null,
@@ -50,7 +65,7 @@ async function lookupStockX(styleCode: string): Promise<MarketplaceResult | null
   if (!listing) return null;
   return {
     platform: 'StockX',
-    brand: listing.brand,
+    brand: normalizeBrand(listing.brand),
     colorway: listing.colorway,
     productName: listing.name,
     retailPrice: listing.retailPrice,
