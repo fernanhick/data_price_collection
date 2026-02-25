@@ -11,6 +11,7 @@ import { SKU } from '../types/index.js';
 
 interface FetchOptions {
   limit?: number;
+  all?: boolean;
   tier?: 1 | 2 | 3;
   brand?: string;
   skipStockX?: boolean;
@@ -19,6 +20,7 @@ interface FetchOptions {
 async function fetchPricesManual(options: FetchOptions = {}) {
   const {
     limit = 10,
+    all = false,
     tier,
     brand,
     skipStockX = false,
@@ -40,10 +42,14 @@ async function fetchPricesManual(options: FetchOptions = {}) {
       params.push(`%${brand}%`);
     }
 
-    queryStr += ` ORDER BY tier ASC, created_at DESC LIMIT $${paramIndex}`;
-    params.push(limit);
+    queryStr += ` ORDER BY tier ASC, created_at DESC`;
 
-    logger.info({ limit, tier, brand, skipStockX }, 'Starting manual price fetch');
+    if (!all) {
+      queryStr += ` LIMIT $${paramIndex}`;
+      params.push(limit);
+    }
+
+    logger.info({ limit: all ? 'ALL' : limit, tier, brand, skipStockX }, 'Starting manual price fetch');
 
     const result = await dbQuery<SKU>(queryStr, params);
     const skus = result.rows;
@@ -158,12 +164,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   const options: FetchOptions = {
     limit: 10,
+    all: false,
     skipStockX: false,
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     switch (arg) {
+      case '--all':
+        options.all = true;
+        break;
       case '--limit':
         options.limit = parseInt(args[++i], 10);
         break;
@@ -186,6 +196,7 @@ Usage:
   tsx src/scripts/fetch-prices-manual.ts [options]
 
 Options:
+  --all               Fetch prices for the entire catalog (ignores --limit)
   --limit <number>    Number of sneakers to fetch prices for (default: 10)
   --tier <1|2|3>      Filter by tier (default: all tiers)
   --brand <name>      Filter by brand name (default: all brands)
@@ -193,8 +204,11 @@ Options:
   --help              Show this help message
 
 Examples:
-  # Fetch prices for 10 sneakers
-  tsx src/scripts/fetch-prices-manual.ts
+  # Fetch prices for the full catalog
+  tsx src/scripts/fetch-prices-manual.ts --all
+
+  # Full catalog, skip StockX (faster)
+  tsx src/scripts/fetch-prices-manual.ts --all --skip-stockx
 
   # Fetch prices for 5 Nike sneakers
   tsx src/scripts/fetch-prices-manual.ts --brand Nike --limit 5
