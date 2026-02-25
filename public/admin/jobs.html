@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobs - Sneaker Admin</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .jobs-container {
+            padding: 24px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-header h2 {
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+        }
+
+        /* Job Cards Grid */
+        .jobs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .job-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border: 1px solid #eee;
+        }
+
+        .job-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .job-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .job-card-title {
+            flex: 1;
+        }
+
+        .job-card-title h3 {
+            margin: 0 0 4px 0;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .job-card-title p {
+            margin: 0;
+            font-size: 13px;
+            color: #777;
+        }
+
+        .job-params {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+            align-items: center;
+        }
+
+        .job-param {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .job-param label {
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .job-param select,
+        .job-param input[type="number"] {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            color: #333;
+        }
+
+        .job-param input[type="number"] {
+            width: 70px;
+        }
+
+        .job-param input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .job-card-footer {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-run {
+            background: #27ae60;
+            color: white;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+
+        .btn-run:hover:not(:disabled) {
+            background: #219a52;
+        }
+
+        .btn-run:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .btn-run .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        .job-status-inline {
+            font-size: 13px;
+            color: #777;
+        }
+
+        /* Run History Table */
+        .history-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border: 1px solid #eee;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .history-table th {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            border-bottom: 2px solid #eee;
+            white-space: nowrap;
+        }
+
+        .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        .history-table tr:hover td {
+            background: #fafafa;
+        }
+
+        .history-table tr.expandable {
+            cursor: pointer;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .running-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f39c12;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .expand-row td {
+            padding: 0 12px 12px;
+        }
+
+        .expand-content {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #333;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .no-history {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .btn-refresh-sm {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+        }
+
+        .btn-refresh-sm:hover {
+            background: #f0f0f0;
+            border-color: #bbb;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login redirect handled by script -->
+    <div id="jobsPage" style="display:none;">
+        <div class="jobs-container">
+            <div class="section-header" style="margin-bottom: 20px;">
+                <h2>Available Jobs</h2>
+            </div>
+
+            <div id="jobsGrid" class="jobs-grid">
+                <!-- Job cards injected by JS -->
+                <div style="padding: 40px; color: #999; text-align: center;">Loading jobs...</div>
+            </div>
+
+            <div class="section-header">
+                <h2>Run History</h2>
+                <button class="btn-refresh-sm" id="refreshHistoryBtn">🔄 Refresh</button>
+            </div>
+
+            <div class="history-card">
+                <table class="history-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Job</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr><td colspan="5" class="no-history">Loading history...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+    <script src="nav.js"></script>
+    <script>
+        // ==========================
+        // Jobs Page State
+        // ==========================
+        let jobDefs = [];
+        let pollIntervals = {}; // runId -> intervalId
+        let expandedRows = new Set(); // Set of run IDs that are expanded
+
+        // ==========================
+        // Initialize
+        // ==========================
+        document.addEventListener('DOMContentLoaded', async function () {
+            if (!isLoggedIn()) {
+                window.location.href = '/admin';
+                return;
+            }
+
+            AdminNav.init('jobs');
+            document.getElementById('jobsPage').style.display = 'block';
+
+            await loadJobDefs();
+            await loadHistory();
+
+            document.getElementById('refreshHistoryBtn').addEventListener('click', loadHistory);
+        });
+
+        // ==========================
+        // Load Job Definitions
+        // ==========================
+        async function loadJobDefs() {
+            try {
+                const data = await apiRequest('GET', '/api/admin/jobs');
+                jobDefs = data.jobs || [];
+                renderJobCards();
+            } catch (err) {
+                document.getElementById('jobsGrid').innerHTML =
+                    `<div style="padding:20px;color:red;">Failed to load jobs: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function renderJobCards() {
+            const grid = document.getElementById('jobsGrid');
+            if (jobDefs.length === 0) {
+                grid.innerHTML = '<div style="padding:20px;color:#999;">No jobs available</div>';
+                return;
+            }
+
+            grid.innerHTML = jobDefs.map(job => buildJobCard(job)).join('');
+
+            // Attach run buttons
+            jobDefs.forEach(job => {
+                document.getElementById(`run-${job.type}`).addEventListener('click', () => runJob(job.type));
+            });
+        }
+
+        function buildJobCard(job) {
+            const paramsHTML = job.params.map(p => buildParamInput(job.type, p)).join('');
+            return `
+                <div class="job-card" id="card-${job.type}">
+                    <div class="job-card-header">
+                        <span class="job-icon">${job.icon}</span>
+                        <div class="job-card-title">
+                            <h3>${escapeHtml(job.label)}</h3>
+                            <p>${escapeHtml(job.description)}</p>
+                        </div>
+                    </div>
+                    <div class="job-params">${paramsHTML}</div>
+                    <div class="job-card-footer">
+                        <span class="job-status-inline" id="status-${job.type}"></span>
+                        <button class="btn-run" id="run-${job.type}">
+                            ▶ Run Job
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildParamInput(jobType, param) {
+            const id = `param-${jobType}-${param.name}`;
+            if (param.type === 'select') {
+                const options = param.options.map(o =>
+                    `<option value="${escapeHtml(o.value)}" ${o.value === String(param.default) ? 'selected' : ''}>${escapeHtml(o.label)}</option>`
+                ).join('');
+                return `<div class="job-param"><label for="${id}">${escapeHtml(param.label)}:</label><select id="${id}">${options}</select></div>`;
+            }
+            if (param.type === 'number') {
+                return `<div class="job-param"><label for="${id}">${escapeHtml(param.label)}:</label><input type="number" id="${id}" value="${param.default}" min="1"></div>`;
+            }
+            if (param.type === 'checkbox') {
+                return `<div class="job-param"><input type="checkbox" id="${id}" ${param.default ? 'checked' : ''}><label for="${id}">${escapeHtml(param.label)}</label></div>`;
+            }
+            return '';
+        }
+
+        function collectJobParams(jobType) {
+            const job = jobDefs.find(j => j.type === jobType);
+            if (!job) return {};
+
+            const params = {};
+            for (const p of job.params) {
+                const el = document.getElementById(`param-${jobType}-${p.name}`);
+                if (!el) continue;
+                if (p.type === 'checkbox') params[p.name] = el.checked;
+                else if (p.type === 'number') params[p.name] = parseInt(el.value, 10) || p.default;
+                else params[p.name] = el.value;
+            }
+            return params;
+        }
+
+        // ==========================
+        // Run a Job
+        // ==========================
+        async function runJob(jobType) {
+            const btn = document.getElementById(`run-${jobType}`);
+            const statusEl = document.getElementById(`status-${jobType}`);
+            const params = collectJobParams(jobType);
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running...';
+            statusEl.textContent = '';
+
+            try {
+                const result = await apiRequest('POST', '/api/admin/jobs/run', { jobType, params });
+                const runId = result.runId;
+
+                statusEl.textContent = `Run #${runId} started`;
+                showToast(`Job "${jobType}" started (run #${runId})`, 'success');
+
+                // Add a new running row to history
+                await loadHistory();
+
+                // Poll for completion
+                const interval = setInterval(async () => {
+                    try {
+                        const run = await apiRequest('GET', `/api/admin/jobs/run/${runId}`);
+                        if (run.status !== 'running') {
+                            clearInterval(interval);
+                            delete pollIntervals[runId];
+
+                            btn.disabled = false;
+                            btn.innerHTML = '▶ Run Job';
+                            statusEl.textContent = run.status === 'completed' ? '✅ Done' : '❌ Failed';
+
+                            await loadHistory();
+
+                            if (run.status === 'completed') {
+                                showToast(`Job "${jobType}" completed successfully`, 'success');
+                            } else {
+                                showToast(`Job "${jobType}" failed: ${run.error || 'unknown error'}`, 'error');
+                            }
+                        } else {
+                            await loadHistory(); // refresh running row
+                        }
+                    } catch (err) {
+                        clearInterval(interval);
+                        delete pollIntervals[runId];
+                        btn.disabled = false;
+                        btn.innerHTML = '▶ Run Job';
+                    }
+                }, 3000);
+
+                pollIntervals[runId] = interval;
+
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = '▶ Run Job';
+                statusEl.textContent = '❌ ' + err.message;
+                showToast(err.message, 'error');
+            }
+        }
+
+        // ==========================
+        // History Table
+        // ==========================
+        async function loadHistory() {
+            try {
+                const data = await apiRequest('GET', '/api/admin/jobs/history?limit=30');
+                renderHistory(data.runs || []);
+            } catch (err) {
+                document.getElementById('historyBody').innerHTML =
+                    `<tr><td colspan="5" class="no-history" style="color:red;">Failed to load history</td></tr>`;
+            }
+        }
+
+        function renderHistory(runs) {
+            const tbody = document.getElementById('historyBody');
+
+            if (runs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="no-history">No job runs yet. Click "Run Job" to get started.</td></tr>`;
+                return;
+            }
+
+            const rows = [];
+            for (const run of runs) {
+                const jobDef = jobDefs.find(j => j.type === run.job_type);
+                const icon = jobDef ? jobDef.icon : '⚙';
+                const label = jobDef ? jobDef.label : run.job_type;
+
+                const started = new Date(run.started_at);
+                const startedStr = formatTimeAgo(started);
+                const durationStr = run.duration_seconds != null
+                    ? formatDuration(run.duration_seconds)
+                    : '—';
+
+                let statusBadge = '';
+                if (run.status === 'running') {
+                    statusBadge = `<span class="status-badge status-running"><span class="running-pulse"></span> Running</span>`;
+                } else if (run.status === 'completed') {
+                    statusBadge = `<span class="status-badge status-completed">✅ Done</span>`;
+                } else {
+                    statusBadge = `<span class="status-badge status-failed">❌ Failed</span>`;
+                }
+
+                let resultStr = '—';
+                if (run.status === 'completed' && run.stats) {
+                    resultStr = summarizeStats(run.stats);
+                } else if (run.status === 'failed' && run.error) {
+                    resultStr = `<span style="color:#e74c3c;" title="${escapeHtml(run.error)}">${escapeHtml(run.error.substring(0, 60))}${run.error.length > 60 ? '...' : ''}</span>`;
+                } else if (run.status === 'running') {
+                    resultStr = '<em style="color:#999">in progress...</em>';
+                }
+
+                const expanded = expandedRows.has(run.id);
+
+                rows.push(`
+                    <tr class="expandable" onclick="toggleExpand(${run.id})" title="Click to expand details">
+                        <td>${icon} ${escapeHtml(label)}</td>
+                        <td title="${started.toLocaleString()}">${escapeHtml(startedStr)}</td>
+                        <td>${escapeHtml(durationStr)}</td>
+                        <td>${statusBadge}</td>
+                        <td>${resultStr}</td>
+                    </tr>
+                `);
+
+                if (expanded) {
+                    const details = JSON.stringify({
+                        id: run.id,
+                        params: run.params,
+                        stats: run.stats,
+                        error: run.error,
+                        started_at: run.started_at,
+                        finished_at: run.finished_at,
+                    }, null, 2);
+                    rows.push(`
+                        <tr class="expand-row" id="expand-${run.id}">
+                            <td colspan="5">
+                                <div class="expand-content">${escapeHtml(details)}</div>
+                            </td>
+                        </tr>
+                    `);
+                }
+            }
+
+            tbody.innerHTML = rows.join('');
+        }
+
+        function toggleExpand(runId) {
+            if (expandedRows.has(runId)) {
+                expandedRows.delete(runId);
+            } else {
+                expandedRows.add(runId);
+            }
+            loadHistory();
+        }
+
+        function summarizeStats(stats) {
+            if (!stats) return '—';
+            const parts = [];
+            if (stats.imported != null) parts.push(`${stats.imported} imported`);
+            if (stats.inserted != null) parts.push(`${stats.inserted} inserted`);
+            if (stats.success != null) parts.push(`${stats.success} success`);
+            if (stats.total != null) parts.push(`${stats.total} total`);
+            if (stats.fetched != null) parts.push(`${stats.fetched} fetched`);
+            if (stats.failed != null && stats.failed > 0) parts.push(`${stats.failed} failed`);
+            return parts.length > 0 ? parts.join(', ') : JSON.stringify(stats).substring(0, 80);
+        }
+
+        function formatDuration(seconds) {
+            if (seconds < 60) return `${seconds}s`;
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+        }
+
+        function showToast(message, type) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('toast-show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('toast-show');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

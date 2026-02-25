@@ -5,6 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sneaker Catalog Admin</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .kpi-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            padding: 20px 20px 0;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-left: 4px solid #3498db;
+        }
+        .kpi-card h4 {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .kpi-card .kpi-value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #333;
+            line-height: 1;
+        }
+        .kpi-card .kpi-sub {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .kpi-card.kpi-green { border-left-color: #27ae60; }
+        .kpi-card.kpi-orange { border-left-color: #f39c12; }
+        .kpi-card.kpi-red { border-left-color: #e74c3c; }
+    </style>
 </head>
 <body>
     <!-- Login Screen -->
@@ -43,14 +79,29 @@
 
     <!-- Main Dashboard -->
     <div id="dashboard" class="dashboard" style="display: none;">
-        <!-- Header -->
-        <header class="header">
-            <h1>Sneaker Catalog Admin</h1>
-            <div style="display: flex; gap: 10px;">
-                <a href="/admin/analytics.html" class="btn-secondary" style="text-decoration: none; display: inline-block; line-height: 1.5;">📊 Analytics</a>
-                <button id="logoutBtn" class="btn-secondary">Logout</button>
+        <!-- KPI Strip -->
+        <div class="kpi-strip" id="kpiStrip">
+            <div class="kpi-card">
+                <h4>Total SKUs</h4>
+                <div class="kpi-value" id="kpiTotalSkus">-</div>
+                <div class="kpi-sub">in catalog</div>
             </div>
-        </header>
+            <div class="kpi-card kpi-green">
+                <h4>Prices Today</h4>
+                <div class="kpi-value" id="kpiPricesToday">-</div>
+                <div class="kpi-sub">price points added</div>
+            </div>
+            <div class="kpi-card kpi-orange">
+                <h4>Scheduler</h4>
+                <div class="kpi-value" id="kpiScheduler" style="font-size:18px;">-</div>
+                <div class="kpi-sub" id="kpiSchedulerSub">checking...</div>
+            </div>
+            <div class="kpi-card">
+                <h4>SKUs Added Today</h4>
+                <div class="kpi-value" id="kpiSkusToday">-</div>
+                <div class="kpi-sub">new SKUs</div>
+            </div>
+        </div>
 
         <!-- Recent Activity Section -->
         <div class="activity-section">
@@ -231,5 +282,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="app.js"></script>
+    <script src="nav.js"></script>
 </body>
 </html>

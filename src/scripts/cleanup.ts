@@ -241,8 +241,6 @@ async function cleanupNonFootwear(dryRun: boolean = true) {
   } catch (error) {
     logger.error({ error }, 'Cleanup failed');
     throw error;
-  } finally {
-    await closePool();
   }
 }
 
@@ -285,7 +283,8 @@ Note: A detailed report will be saved to a file in the current directory.
     .catch((error) => {
       console.error('\n❌ Cleanup failed:', error.message);
       process.exit(1);
-    });
+    })
+    .finally(() => closePool());
 }
 
 export { cleanupNonFootwear, isNonFootwear };

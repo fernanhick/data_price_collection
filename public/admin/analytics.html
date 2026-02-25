@@ -146,7 +146,6 @@
     <div class="analytics-container">
         <div class="header">
             <h1>📊 Catalog Analytics</h1>
-            <a href="/admin" class="btn-back">← Back to Catalog</a>
         </div>
 
         <div id="loading" class="loading">Loading analytics...</div>
@@ -261,7 +260,13 @@
     </div>
 
     <script src="app.js"></script>
+    <script src="nav.js"></script>
     <script>
+        // Initialize shared nav
+        document.addEventListener('DOMContentLoaded', function() {
+            AdminNav.init('analytics');
+        });
+
         // Check if Chart.js is loaded
         if (typeof Chart === 'undefined') {
             console.error('Chart.js is not loaded!');

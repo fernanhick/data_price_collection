@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import authRoutes from './routes/auth.js';
 import catalogRoutes from './routes/catalog.js';
+import jobsRoutes from './routes/jobs.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -113,6 +114,7 @@ app.use('/api', verifyConvexJWT, analyticsRoutes);
 
 // Admin routes (require JWT + admin authorization)
 app.use('/api/admin', verifyConvexJWT, verifyAdmin, adminRoutes);
+app.use('/api/admin/jobs', verifyConvexJWT, verifyAdmin, jobsRoutes);
 
 // Error handling middleware
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

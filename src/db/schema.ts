@@ -90,4 +90,20 @@ CREATE TABLE IF NOT EXISTS admin_users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+
+-- Job Run History (for Admin Jobs UI)
+CREATE TABLE IF NOT EXISTS job_runs (
+  id SERIAL PRIMARY KEY,
+  job_type VARCHAR(50) NOT NULL,
+  params JSONB DEFAULT '{}',
+  status VARCHAR(20) NOT NULL DEFAULT 'running',
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  stats JSONB,
+  error TEXT,
+  triggered_by VARCHAR(50) DEFAULT 'admin'
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_runs_started ON job_runs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_status ON job_runs(status);
 `;

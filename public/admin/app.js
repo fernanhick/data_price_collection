@@ -420,6 +420,9 @@ if (loginForm) {
         loadRecentPrices();
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
+        // Initialize shared nav and load KPIs
+        if (window.AdminNav) AdminNav.init('dashboard');
+        loadKPIs();
         showSuccess(`Welcome, ${data.user.name || data.user.email}!`);
     } catch (error) {
         clearToken();
@@ -513,6 +516,9 @@ document.getElementById('refreshPricesBtn')?.addEventListener('click', () => {
 
 function logout() {
     clearToken();
+    // Remove shared nav if present
+    const nav = document.getElementById('admin-nav');
+    if (nav) nav.remove();
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('emailInput').value = '';
@@ -583,11 +589,68 @@ window.addEventListener('DOMContentLoaded', () => {
         loadSKUs(1);
         loadRecentSKUs();
         loadRecentPrices();
+        // Initialize shared nav (nav.js must be loaded after app.js)
+        setTimeout(() => {
+            if (window.AdminNav) AdminNav.init('dashboard');
+            loadKPIs();
+        }, 0);
     } else {
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('dashboard').style.display = 'none';
     }
 });
+
+// ======================
+// KPI Data Loading
+// ======================
+
+async function loadKPIs() {
+    try {
+        // Fetch total SKU count and scheduler status in parallel
+        const [analyticsData, healthData, recentPricesData, recentSkusData] = await Promise.allSettled([
+            apiRequest('GET', '/api/analytics'),
+            fetch('/health').then(r => r.json()),
+            apiRequest('GET', '/api/admin/activity/recent-prices?limit=50'),
+            apiRequest('GET', '/api/admin/activity/recent-skus?limit=50'),
+        ]);
+
+        // Total SKUs
+        if (analyticsData.status === 'fulfilled' && analyticsData.value) {
+            document.getElementById('kpiTotalSkus').textContent = analyticsData.value.summary?.total || '—';
+        }
+
+        // Scheduler status
+        if (healthData.status === 'fulfilled') {
+            const h = healthData.value;
+            const schedulerRunning = h.scheduler?.running || false;
+            const kpiEl = document.getElementById('kpiScheduler');
+            const subEl = document.getElementById('kpiSchedulerSub');
+            kpiEl.textContent = schedulerRunning ? '✅ Active' : '⏸ Inactive';
+            kpiEl.style.fontSize = '16px';
+            if (subEl) subEl.textContent = schedulerRunning ? 'jobs scheduled' : 'no scheduled jobs';
+        }
+
+        // Prices added today
+        if (recentPricesData.status === 'fulfilled' && recentPricesData.value) {
+            const today = new Date().toDateString();
+            const todayPrices = (recentPricesData.value.prices || []).filter(p => {
+                return new Date(p.timestamp).toDateString() === today;
+            });
+            document.getElementById('kpiPricesToday').textContent = todayPrices.length;
+        }
+
+        // SKUs added today
+        if (recentSkusData.status === 'fulfilled' && recentSkusData.value) {
+            const today = new Date().toDateString();
+            const todaySkus = (recentSkusData.value.skus || []).filter(s => {
+                return new Date(s.created_at).toDateString() === today;
+            });
+            document.getElementById('kpiSkusToday').textContent = todaySkus.length;
+        }
+    } catch (error) {
+        console.warn('Failed to load KPI data:', error);
+    }
+}
 
 // Script loaded completely
 console.log('=== APP.JS LOADED COMPLETELY ===');
