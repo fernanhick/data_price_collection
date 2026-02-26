@@ -7,6 +7,7 @@ import config from './config/index.js';
 import logger from './utils/logger.js';
 import { healthCheck, closePool } from './db/index.js';
 import { verifyConvexJWT } from './middleware/verifyJWT.js';
+import { verifySecretOrJWT } from './middleware/verifySecretOrJWT.js';
 import { verifyAdmin } from './middleware/verifyAdmin.js';
 import scheduler from './services/scheduler.js';
 import imageProcessor from './services/imageProcessor.js';
@@ -109,7 +110,7 @@ app.use('/api/catalog', catalogRoutes);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);
-app.use('/api/skus', verifyConvexJWT, skuRoutes);
+app.use('/api/skus', verifySecretOrJWT, skuRoutes);
 app.use('/api', verifyConvexJWT, analyticsRoutes);
 
 // Admin routes (require JWT + admin authorization)
