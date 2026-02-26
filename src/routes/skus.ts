@@ -137,10 +137,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
  */
 router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { search, limit = '100' } = req.query;
+    const { search, limit = '100', offset = '0' } = req.query;
     const userId = (req as any).user?.userId;
 
     const limitNum = Math.min(parseInt(limit as string, 10) || 100, 500);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
 
     logger.info({ search, limit: limitNum, userId }, 'Fetching catalog');
 
@@ -160,13 +161,20 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
+    // Get total count
+    const countResult = await dbQuery<{ count: string }>(
+      `SELECT COUNT(*) as count FROM skus ${whereClause}`,
+      params,
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
     // Get catalog with minimal fields
     const result = await dbQuery<SKU>(
       `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, image_local_path
        FROM skus ${whereClause}
        ORDER BY tier ASC, brand ASC, model ASC
-       LIMIT $${params.length + 1}`,
-      [...params, limitNum],
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limitNum, offsetNum],
     );
 
     // Log usage
@@ -181,7 +189,11 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
     }
 
     res.json({
+      total,
       count: result.rows.length,
+      limit: limitNum,
+      offset: offsetNum,
+      has_more: offsetNum + limitNum < total,
       catalog: result.rows.map((sku) => ({
         id: sku.id,
         sku_code: sku.sku_code,
