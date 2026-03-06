@@ -44,7 +44,13 @@
       "Bash(npm run sneaker:discover-safe:*)",
       "Bash(ITERATIONS=11 npm run images:backfill-batch:*)",
       "Bash(DB_TARGET=ec2 npx tsx:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(node:*)",
+      "Bash(DB_SYNC=true DB_TARGET=ec2 tsx:*)",
+      "Bash(DB_SYNC=true DB_TARGET=ec2 ./node_modules/.bin/tsx:*)",
+      "Bash(pm2 show:*)",
+      "Bash(wait:*)"
     ]
   }
 }

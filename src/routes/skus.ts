@@ -2,6 +2,10 @@ import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
 import { SKU } from '../types/index.js';
+import { GoatScraper } from '../services/scrapers/goat.js';
+import imageProcessor from '../services/imageProcessor.js';
+
+const goatScraper = new GoatScraper();
 
 const router = Router();
 
@@ -212,6 +216,155 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     logger.error({ error }, 'Failed to fetch catalog');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/skus/lookup?style_code=CW2288-111
+ * Look up a sneaker by style code. If not in DB, discovers it from GOAT,
+ * downloads the image, and persists it before returning.
+ *
+ * IMPORTANT: This route must be before /:id to avoid path collision
+ */
+router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { style_code } = req.query;
+
+    if (!style_code || typeof style_code !== 'string' || style_code.trim().length === 0) {
+      res.status(400).json({ error: 'style_code query parameter is required' });
+      return;
+    }
+
+    // Normalize: uppercase, spaces → hyphens
+    const styleCode = style_code.trim().toUpperCase().replace(/\s+/g, '-');
+
+    logger.info({ styleCode }, 'SKU lookup requested');
+
+    // Check DB first
+    const existing = await dbQuery<SKU>(
+      `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, image_local_path
+       FROM skus WHERE style_code = $1`,
+      [styleCode],
+    );
+
+    if (existing.rows.length > 0) {
+      const sku = existing.rows[0];
+      const imageUrl = sku.image_local_path || sku.image_url;
+      res.json({
+        discovered: false,
+        sku: {
+          id: sku.id,
+          sku_code: sku.sku_code,
+          style_code: sku.style_code,
+          brand: sku.brand,
+          model: sku.model,
+          colorway: sku.colorway,
+          retail_price: sku.retail_price,
+          tier: sku.tier,
+          image_url: imageUrl,
+          image_thumbnail_url: sku.image_local_path
+            ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
+            : null,
+          display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
+        },
+      });
+      return;
+    }
+
+    // Not in DB — discover from GOAT
+    const listings = await goatScraper.searchProducts(styleCode, 5);
+
+    if (listings.length === 0) {
+      res.status(404).json({ error: 'Sneaker not found' });
+      return;
+    }
+
+    // Find exact SKU match first, fall back to first result
+    const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+    const listing = listings.find((l) => normalize(l.sku) === normalize(styleCode)) || listings[0];
+
+    // Derive model from listing name (strip brand prefix and quoted colorway)
+    const colorwayMatch = listing.name.match(/['"]([^'"]+)['"]/);
+    const derivedColorway = colorwayMatch ? colorwayMatch[1] : (listing.colorway || '');
+    let cleanName = listing.name.replace(/['"][^'"]+['"]/, '').trim();
+    if (listing.brand) {
+      cleanName = cleanName.replace(new RegExp(listing.brand, 'i'), '').trim();
+    }
+    const model = cleanName.trim() || listing.name;
+
+    // Calculate tier
+    let tier = 3;
+    if (listing.retailPriceCents && listing.lowestPriceCents) {
+      const premium = (listing.lowestPriceCents / listing.retailPriceCents) - 1;
+      if (premium > 0.5) tier = 1;
+      else if (premium > 0.15) tier = 2;
+    }
+
+    const brand = listing.brand || 'Unknown';
+    const retailPrice = listing.retailPriceCents ? listing.retailPriceCents / 100 : null;
+
+    // Insert into DB (ON CONFLICT handles race conditions)
+    const insertResult = await dbQuery<{ id: number }>(
+      `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (style_code) DO NOTHING
+       RETURNING id`,
+      [styleCode, styleCode, brand, model, derivedColorway, retailPrice, tier, listing.imageUrl],
+    );
+
+    let skuId: number;
+    if (insertResult.rows.length > 0) {
+      skuId = insertResult.rows[0].id;
+    } else {
+      // Race condition: row already exists, re-query
+      const requery = await dbQuery<{ id: number }>(
+        `SELECT id FROM skus WHERE style_code = $1`,
+        [styleCode],
+      );
+      skuId = requery.rows[0].id;
+    }
+
+    // Download and optimize image
+    let imageLocalPath: string | null = null;
+    let fileSize: number | null = null;
+    if (listing.imageUrl) {
+      try {
+        const imgResult = await imageProcessor.downloadAndOptimize(listing.imageUrl, styleCode);
+        if (imgResult) {
+          imageLocalPath = imgResult.fullPath;
+          fileSize = imgResult.fileSize;
+          await dbQuery(
+            `UPDATE skus SET image_local_path = $1, image_file_size = $2, image_downloaded_at = NOW() WHERE id = $3`,
+            [imageLocalPath, fileSize, skuId],
+          );
+        }
+      } catch (imgErr) {
+        logger.warn({ imgErr, styleCode }, 'Image download failed during lookup; continuing without image');
+      }
+    }
+
+    const finalImageUrl = imageLocalPath || listing.imageUrl;
+    res.json({
+      discovered: true,
+      sku: {
+        id: skuId,
+        sku_code: styleCode,
+        style_code: styleCode,
+        brand,
+        model,
+        colorway: derivedColorway,
+        retail_price: retailPrice,
+        tier,
+        image_url: finalImageUrl,
+        image_thumbnail_url: imageLocalPath
+          ? imageLocalPath.replace('/sneakers/', '/sneakers/thumbs/')
+          : null,
+        display_name: `${brand} ${model}${derivedColorway ? ' - ' + derivedColorway : ''}`,
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed to lookup SKU');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
