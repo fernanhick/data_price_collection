@@ -5,7 +5,7 @@ import { SKU, GOATListing } from '../types/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
 import { StockxScraper } from '../services/scrapers/stockx.js';
 import imageProcessor from '../services/imageProcessor.js';
-import { priceFetcher } from '../services/pricing/priceFetcher.js';
+import priceFetcher from '../services/pricing/priceFetcher.js';
 
 const goatScraper = new GoatScraper();
 const stockxScraper = new StockxScraper();
@@ -424,13 +424,13 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
 
     priceFetcher
       .fetchAllPricesForSku(newSku)
-      .then((results) => {
+      .then((results: any) => {
         logger.info(
           { styleCode, ebay: results.ebay.success, goat: results.goat.success, stockx: results.stockx.success },
           'Background price fetch complete for discovered SKU',
         );
       })
-      .catch((err) => logger.warn({ err, styleCode }, 'Background price fetch failed for discovered SKU'));
+      .catch((err: any) => logger.warn({ err, styleCode }, 'Background price fetch failed for discovered SKU'));
   } catch (error) {
     logger.error({ error }, 'Failed to lookup SKU');
     res.status(500).json({ error: 'Internal server error' });
