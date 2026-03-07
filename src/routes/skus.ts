@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
-import { SKU } from '../types/index.js';
+import { SKU, GOATListing } from '../types/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
+import { StockxScraper } from '../services/scrapers/stockx.js';
 import imageProcessor from '../services/imageProcessor.js';
+import { priceFetcher } from '../services/pricing/priceFetcher.js';
 
 const goatScraper = new GoatScraper();
+const stockxScraper = new StockxScraper();
 
 const router = Router();
 
@@ -273,16 +276,55 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Not in DB — discover from GOAT
-    const listings = await goatScraper.searchProducts(styleCode, 5);
+    const goatListings = await goatScraper.searchProducts(styleCode, 5);
 
-    if (listings.length === 0) {
-      res.status(404).json({ error: 'Sneaker not found' });
-      return;
+    let listing: GOATListing | undefined;
+    let discoveredGoatId: string | null = null;
+    let discoveredStockxId: string | null = null;
+    let discoverySource: 'goat' | 'stockx' = 'goat';
+
+    if (goatListings.length > 0) {
+      const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+      listing = goatListings.find((l) => normalize(l.sku) === normalize(styleCode)) || goatListings[0];
+    } else {
+      // GOAT has no results for this style code — try StockX (Puppeteer, ~15–45s)
+      logger.info({ styleCode }, 'GOAT returned no results, falling back to StockX lookup');
+      const sxListing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
+        logger.warn({ err, styleCode }, 'StockX fallback failed');
+        return null;
+      });
+
+      if (!sxListing) {
+        res.status(404).json({ error: 'Sneaker not found on GOAT or StockX' });
+        return;
+      }
+
+      // StockX found it — store urlKey for future StockX price fetches
+      discoveredStockxId = sxListing.urlKey || null;
+      discoverySource = 'stockx';
+
+      // Secondary GOAT search by product name to get GOAT's internal SKU for future price fetches
+      const goatByName = await goatScraper.searchProducts(sxListing.name, 3).catch(() => []);
+      if (goatByName.length > 0) {
+        discoveredGoatId = goatByName[0].sku || null;
+        logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via name search');
+      }
+
+      // Map StockX listing into GOATListing shape so the rest of the handler works unchanged
+      listing = {
+        name: sxListing.name,
+        slug: sxListing.urlKey,
+        sku: styleCode,
+        lowestPriceCents: Math.round(sxListing.lowestAsk * 100),
+        retailPriceCents: sxListing.retailPrice ? Math.round(sxListing.retailPrice * 100) : null,
+        instantShipPriceCents: null,
+        brand: sxListing.brand,
+        colorway: sxListing.colorway,
+        imageUrl: sxListing.imageUrl || '',
+        url: sxListing.url,
+        timestamp: new Date(),
+      } as GOATListing;
     }
-
-    // Find exact SKU match first, fall back to first result
-    const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
-    const listing = listings.find((l) => normalize(l.sku) === normalize(styleCode)) || listings[0];
 
     // Derive model from listing name (strip brand prefix and quoted colorway)
     const colorwayMatch = listing.name.match(/['"]([^'"]+)['"]/);
@@ -306,11 +348,11 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
 
     // Insert into DB (ON CONFLICT handles race conditions)
     const insertResult = await dbQuery<{ id: number }>(
-      `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, goat_id, stockx_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (style_code) DO NOTHING
        RETURNING id`,
-      [styleCode, styleCode, brand, model, derivedColorway, retailPrice, tier, listing.imageUrl],
+      [styleCode, styleCode, brand, model, derivedColorway, retailPrice, tier, listing.imageUrl, discoveredGoatId, discoveredStockxId],
     );
 
     let skuId: number;
@@ -347,6 +389,7 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
     const finalImageUrl = imageLocalPath || listing.imageUrl;
     res.json({
       discovered: true,
+      discovery_source: discoverySource,
       sku: {
         id: skuId,
         sku_code: styleCode,
@@ -363,6 +406,31 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
         display_name: `${brand} ${model}${derivedColorway ? ' - ' + derivedColorway : ''}`,
       },
     });
+
+    // Background: fetch prices after response is sent (fire-and-forget)
+    const newSku: SKU = {
+      id: skuId,
+      sku_code: styleCode,
+      style_code: styleCode,
+      brand,
+      model,
+      colorway: derivedColorway,
+      tier,
+      retail_price: retailPrice ?? undefined,
+      image_url: listing.imageUrl ?? undefined,
+      goat_id: discoveredGoatId ?? undefined,
+      stockx_id: discoveredStockxId ?? undefined,
+    } as SKU;
+
+    priceFetcher
+      .fetchAllPricesForSku(newSku)
+      .then((results) => {
+        logger.info(
+          { styleCode, ebay: results.ebay.success, goat: results.goat.success, stockx: results.stockx.success },
+          'Background price fetch complete for discovered SKU',
+        );
+      })
+      .catch((err) => logger.warn({ err, styleCode }, 'Background price fetch failed for discovered SKU'));
   } catch (error) {
     logger.error({ error }, 'Failed to lookup SKU');
     res.status(500).json({ error: 'Internal server error' });
