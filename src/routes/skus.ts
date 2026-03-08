@@ -4,11 +4,13 @@ import logger from '../utils/logger.js';
 import { SKU, GOATListing } from '../types/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
 import { StockxScraper } from '../services/scrapers/stockx.js';
+import { KicksDBScraper } from '../services/scrapers/kicksdb.js';
 import imageProcessor from '../services/imageProcessor.js';
 import priceFetcher from '../services/pricing/priceFetcher.js';
 
 const goatScraper = new GoatScraper();
 const stockxScraper = new StockxScraper();
+const kicksdbScraper = new KicksDBScraper();
 
 const router = Router();
 
@@ -281,49 +283,83 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
     let listing: GOATListing | undefined;
     let discoveredGoatId: string | null = null;
     let discoveredStockxId: string | null = null;
-    let discoverySource: 'goat' | 'stockx' = 'goat';
+    let discoverySource: 'goat' | 'kicksdb' | 'stockx' = 'goat';
 
     if (goatListings.length > 0) {
       const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
       listing = goatListings.find((l) => normalize(l.sku) === normalize(styleCode)) || goatListings[0];
     } else {
-      // GOAT has no results for this style code — try StockX (Puppeteer, ~15–45s)
-      logger.info({ styleCode }, 'GOAT returned no results, falling back to StockX lookup');
-      const sxListing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
-        logger.warn({ err, styleCode }, 'StockX fallback failed');
-        return null;
+      // GOAT has no results — try KicksDB (StockX mirror, fast REST API)
+      logger.info({ styleCode }, 'GOAT returned no results, trying KicksDB lookup');
+      const kdbResults = await kicksdbScraper.searchByStyleCode(styleCode, 5).catch((err) => {
+        logger.warn({ err, styleCode }, 'KicksDB lookup failed');
+        return [] as Awaited<ReturnType<KicksDBScraper['searchByStyleCode']>>;
       });
 
-      if (!sxListing) {
-        res.status(404).json({ error: 'Sneaker not found on GOAT or StockX' });
-        return;
+      if (kdbResults.length > 0) {
+        // Prefer an exact styleId match, fall back to first result
+        const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+        const kdbMatch = kdbResults.find((r) => normalize(r.styleId) === normalize(styleCode)) || kdbResults[0];
+
+        discoveredStockxId = kdbMatch.urlKey || null;
+        discoverySource = 'kicksdb';
+
+        // Secondary GOAT search by product name to get GOAT's internal SKU
+        const goatByName = await goatScraper.searchProducts(kdbMatch.name, 3).catch(() => []);
+        if (goatByName.length > 0) {
+          discoveredGoatId = goatByName[0].sku || null;
+          logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via KicksDB name search');
+        }
+
+        listing = {
+          name: kdbMatch.name,
+          slug: kdbMatch.urlKey,
+          sku: styleCode,
+          lowestPriceCents: 0,
+          retailPriceCents: kdbMatch.retailPrice ? Math.round(kdbMatch.retailPrice * 100) : null,
+          instantShipPriceCents: null,
+          brand: kdbMatch.brand,
+          colorway: kdbMatch.colorway,
+          imageUrl: '',
+          url: '',
+          timestamp: new Date(),
+        } as GOATListing;
+      } else {
+        // KicksDB also empty — last resort: StockX Puppeteer (~15–45s)
+        logger.info({ styleCode }, 'KicksDB returned no results, falling back to StockX Puppeteer');
+        const sxListing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
+          logger.warn({ err, styleCode }, 'StockX fallback failed');
+          return null;
+        });
+
+        if (!sxListing) {
+          res.status(404).json({ error: 'Sneaker not found on GOAT, KicksDB, or StockX' });
+          return;
+        }
+
+        discoveredStockxId = sxListing.urlKey || null;
+        discoverySource = 'stockx';
+
+        const goatByName = await goatScraper.searchProducts(sxListing.name, 3).catch(() => []);
+        if (goatByName.length > 0) {
+          discoveredGoatId = goatByName[0].sku || null;
+          logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via StockX name search');
+        }
+
+        listing = {
+          name: sxListing.name,
+          slug: sxListing.urlKey,
+          sku: styleCode,
+          lowestPriceCents: Math.round(sxListing.lowestAsk * 100),
+          retailPriceCents: sxListing.retailPrice ? Math.round(sxListing.retailPrice * 100) : null,
+          instantShipPriceCents: null,
+          brand: sxListing.brand,
+          colorway: sxListing.colorway,
+          imageUrl: sxListing.imageUrl || '',
+          url: sxListing.url,
+          timestamp: new Date(),
+        } as GOATListing;
       }
-
-      // StockX found it — store urlKey for future StockX price fetches
-      discoveredStockxId = sxListing.urlKey || null;
-      discoverySource = 'stockx';
-
-      // Secondary GOAT search by product name to get GOAT's internal SKU for future price fetches
-      const goatByName = await goatScraper.searchProducts(sxListing.name, 3).catch(() => []);
-      if (goatByName.length > 0) {
-        discoveredGoatId = goatByName[0].sku || null;
-        logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via name search');
-      }
-
-      // Map StockX listing into GOATListing shape so the rest of the handler works unchanged
-      listing = {
-        name: sxListing.name,
-        slug: sxListing.urlKey,
-        sku: styleCode,
-        lowestPriceCents: Math.round(sxListing.lowestAsk * 100),
-        retailPriceCents: sxListing.retailPrice ? Math.round(sxListing.retailPrice * 100) : null,
-        instantShipPriceCents: null,
-        brand: sxListing.brand,
-        colorway: sxListing.colorway,
-        imageUrl: sxListing.imageUrl || '',
-        url: sxListing.url,
-        timestamp: new Date(),
-      } as GOATListing;
     }
 
     // Derive model from listing name (strip brand prefix and quoted colorway)
