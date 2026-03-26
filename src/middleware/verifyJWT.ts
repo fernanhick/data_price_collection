@@ -131,7 +131,10 @@ export async function verifyConvexJWT(
       algorithms: ['RS256'],
     };
 
-    if (!isDevelopment) {
+    // Only enforce issuer in production Convex mode — dev Clerk instances don't require it
+    // and CONVEX_URL_PROD may not be set for non-production environments
+    const convexMode = process.env.CONVEX_ENV || process.env.NODE_ENV || 'development';
+    if (convexMode === 'production' && config.convex.url) {
       verifyOptions.issuer = config.convex.url;
     }
 
@@ -146,7 +149,7 @@ export async function verifyConvexJWT(
     logger.debug(`Clerk JWT verified for user: ${verifiedClerk.sub}`);
     next();
   } catch (error) {
-    logger.warn({ error }, 'JWT verification failed');
+    logger.warn({ error: (error as Error).message }, 'JWT verification failed');
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
