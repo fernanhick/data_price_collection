@@ -77,6 +77,56 @@ export class GoatScraper {
   }
 
   /**
+   * Search for catalog discovery — no price filter.
+   * Unlike searchProducts(), includes items with no active listings so
+   * style code lookups find shoes that exist in GOAT's catalog but aren't
+   * currently listed (common for Adidas and older releases).
+   */
+  async searchForDiscovery(query: string, maxResults: number = 10): Promise<GOATListing[]> {
+    try {
+      logger.info({ query, maxResults }, 'Starting GOAT discovery search');
+
+      const response = await axios.post(
+        this.algoliaUrl,
+        { query, hitsPerPage: maxResults, filters: 'product_category:shoes' },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-algolia-api-key': this.algoliaApiKey,
+            'x-algolia-application-id': this.algoliaAppId,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          timeout: 10000,
+        },
+      );
+
+      const hits = response.data.hits || [];
+      const listings: GOATListing[] = hits.map((hit: any) => ({
+        name: hit.name || '',
+        slug: hit.slug || '',
+        sku: hit.sku || hit.search_sku || '',
+        lowestPriceCents: hit.lowest_price_cents || 0,
+        retailPriceCents: hit.retail_price_cents || null,
+        instantShipPriceCents: hit.instant_ship_lowest_price_cents || null,
+        brand: hit.brand_name || '',
+        colorway: hit.details || '',
+        imageUrl: hit.grid_picture_url || '',
+        url: `https://www.goat.com/sneakers/${hit.slug}`,
+        timestamp: new Date(),
+      }));
+
+      logger.info({ query, found: listings.length }, 'GOAT discovery search completed');
+      return listings;
+    } catch (error) {
+      logger.error(
+        { query, error: error instanceof Error ? error.message : String(error) },
+        'GOAT discovery search failed',
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Search and get prices for a specific SKU
    * @param sku - The product SKU code
    * @returns Price data if found

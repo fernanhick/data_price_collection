@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
-import { SKU, GOATListing } from '../types/index.js';
+import { SKU } from '../types/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
 import { StockxScraper } from '../services/scrapers/stockx.js';
 import { KicksDBScraper } from '../services/scrapers/kicksdb.js';
+import ebayScraper from '../services/scrapers/ebay.js';
 import imageProcessor from '../services/imageProcessor.js';
 import priceFetcher from '../services/pricing/priceFetcher.js';
 
@@ -241,232 +242,272 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Normalize: uppercase, spaces → hyphens
     const styleCode = style_code.trim().toUpperCase().replace(/\s+/g, '-');
+    const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
 
     logger.info({ styleCode }, 'SKU lookup requested');
 
-    // Check DB first
+    // --- Helper: parse model + colorway from a raw listing name ---
+    const parseName = (name: string, brand: string) => {
+      const colorwayMatch = name.match(/['"]([^'"]+)['"]/);
+      const colorway = colorwayMatch ? colorwayMatch[1] : '';
+      let clean = name.replace(/['"][^'"]+['"]/, '').trim();
+      if (brand) clean = clean.replace(new RegExp(brand, 'i'), '').trim();
+      return { model: clean.trim() || name, colorway };
+    };
+
+    // --- Helper: calculate tier from price data ---
+    const calcTier = (lowestCents: number, retailCents: number | null): number => {
+      if (retailCents && lowestCents) {
+        const premium = lowestCents / retailCents - 1;
+        if (premium > 0.5) return 1;
+        if (premium > 0.15) return 2;
+      }
+      return 3;
+    };
+
+    // --- Helper: format a DB row as a result entry ---
+    const formatDbRow = (sku: SKU) => ({
+      match_type: 'exact' as const,
+      source: 'database' as const,
+      id: sku.id,
+      sku_code: sku.sku_code,
+      style_code: sku.style_code,
+      brand: sku.brand,
+      model: sku.model,
+      colorway: sku.colorway || '',
+      retail_price: sku.retail_price ?? null,
+      tier: sku.tier,
+      image_url: (sku as any).image_local_path || null,
+      image_thumbnail_url: (sku as any).image_local_path
+        ? (sku as any).image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
+        : null,
+      display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
+    });
+
+    // ── Step 1: Check DB ────────────────────────────────────────────────────
     const existing = await dbQuery<SKU>(
-      `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, image_local_path
+      `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier,
+              image_url, image_local_path
        FROM skus WHERE style_code = $1`,
       [styleCode],
     );
 
     if (existing.rows.length > 0) {
-      const sku = existing.rows[0];
-      const imageUrl = sku.image_local_path || sku.image_url;
-      res.json({
-        discovered: false,
-        sku: {
-          id: sku.id,
-          sku_code: sku.sku_code,
-          style_code: sku.style_code,
-          brand: sku.brand,
-          model: sku.model,
-          colorway: sku.colorway,
-          retail_price: sku.retail_price,
-          tier: sku.tier,
-          image_url: imageUrl,
-          image_thumbnail_url: sku.image_local_path
-            ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
-            : null,
-          display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
-        },
-      });
+      res.json({ discovered: false, results: existing.rows.map(formatDbRow) });
       return;
     }
 
-    // Not in DB — discover from GOAT
-    const goatListings = await goatScraper.searchProducts(styleCode, 5);
+    // ── Step 2: GOAT + KicksDB in parallel ─────────────────────────────────
+    logger.info({ styleCode }, 'Not in DB — running parallel GOAT + KicksDB discovery');
 
-    let listing: GOATListing | undefined;
-    let discoveredGoatId: string | null = null;
-    let discoveredStockxId: string | null = null;
-    let discoverySource: 'goat' | 'kicksdb' | 'stockx' = 'goat';
-
-    if (goatListings.length > 0) {
-      const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
-      listing = goatListings.find((l) => normalize(l.sku) === normalize(styleCode)) || goatListings[0];
-    } else {
-      // GOAT has no results — try KicksDB (StockX mirror, fast REST API)
-      logger.info({ styleCode }, 'GOAT returned no results, trying KicksDB lookup');
-      const kdbResults = await kicksdbScraper.searchByStyleCode(styleCode, 5).catch((err) => {
+    const [goatSettled, kdbSettled] = await Promise.allSettled([
+      goatScraper.searchForDiscovery(styleCode, 10),
+      kicksdbScraper.searchByStyleCode(styleCode, 10).catch((err) => {
         logger.warn({ err, styleCode }, 'KicksDB lookup failed');
-        return [] as Awaited<ReturnType<KicksDBScraper['searchByStyleCode']>>;
+        return [];
+      }),
+    ]);
+
+    const goatListings = goatSettled.status === 'fulfilled' ? goatSettled.value : [];
+    const kdbListings  = kdbSettled.status  === 'fulfilled' ? kdbSettled.value  : [];
+
+    // ── Step 3: Classify + deduplicate candidates ───────────────────────────
+    interface Candidate {
+      source: 'goat' | 'kicksdb' | 'stockx' | 'ebay';
+      matchType: 'exact' | 'partial';
+      name: string;
+      brand: string;
+      colorway: string;
+      lowestPriceCents: number;
+      retailPriceCents: number | null;
+      imageUrl: string;
+      goatId: string | null;
+      stockxId: string | null;
+    }
+
+    const seen = new Set<string>();
+    const candidates: Candidate[] = [];
+
+    const addCandidate = (c: Candidate) => {
+      const key = normalize(c.brand + c.name);
+      if (seen.has(key)) return; // deduplicate by name+brand
+      seen.add(key);
+      candidates.push(c);
+    };
+
+    // GOAT results — prefer these (better images)
+    for (const l of goatListings) {
+      addCandidate({
+        source: 'goat',
+        matchType: normalize(l.sku) === normalize(styleCode) ? 'exact' : 'partial',
+        name: l.name,
+        brand: l.brand || 'Unknown',
+        colorway: l.colorway || '',
+        lowestPriceCents: l.lowestPriceCents,
+        retailPriceCents: l.retailPriceCents,
+        imageUrl: l.imageUrl,
+        goatId: l.sku || null,
+        stockxId: null,
+      });
+    }
+
+    // KicksDB results
+    for (const l of kdbListings) {
+      addCandidate({
+        source: 'kicksdb',
+        matchType: normalize(l.styleId) === normalize(styleCode) ? 'exact' : 'partial',
+        name: l.name,
+        brand: l.brand || 'Unknown',
+        colorway: l.colorway || '',
+        lowestPriceCents: 0,
+        retailPriceCents: l.retailPrice ? Math.round(l.retailPrice * 100) : null,
+        imageUrl: '',
+        goatId: null,
+        stockxId: l.urlKey || null,
+      });
+    }
+
+    const exactCandidates = candidates.filter((c) => c.matchType === 'exact');
+
+    // ── Step 4: StockX fallback if no exact matches ─────────────────────────
+    if (exactCandidates.length === 0) {
+      logger.info({ styleCode }, 'No exact matches — trying StockX Puppeteer');
+      const sxListing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
+        logger.warn({ err, styleCode }, 'StockX fallback failed');
+        return null;
       });
 
-      if (kdbResults.length > 0) {
-        // Prefer an exact styleId match, fall back to first result
-        const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
-        const kdbMatch = kdbResults.find((r) => normalize(r.styleId) === normalize(styleCode)) || kdbResults[0];
-
-        discoveredStockxId = kdbMatch.urlKey || null;
-        discoverySource = 'kicksdb';
-
-        // Secondary GOAT search by product name to get GOAT's internal SKU
-        const goatByName = await goatScraper.searchProducts(kdbMatch.name, 3).catch(() => []);
-        if (goatByName.length > 0) {
-          discoveredGoatId = goatByName[0].sku || null;
-          logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via KicksDB name search');
-        }
-
-        listing = {
-          name: kdbMatch.name,
-          slug: kdbMatch.urlKey,
-          sku: styleCode,
-          lowestPriceCents: 0,
-          retailPriceCents: kdbMatch.retailPrice ? Math.round(kdbMatch.retailPrice * 100) : null,
-          instantShipPriceCents: null,
-          brand: kdbMatch.brand,
-          colorway: kdbMatch.colorway,
-          imageUrl: '',
-          url: '',
-          timestamp: new Date(),
-        } as GOATListing;
-      } else {
-        // KicksDB also empty — last resort: StockX Puppeteer (~15–45s)
-        logger.info({ styleCode }, 'KicksDB returned no results, falling back to StockX Puppeteer');
-        const sxListing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
-          logger.warn({ err, styleCode }, 'StockX fallback failed');
-          return null;
-        });
-
-        if (!sxListing) {
-          res.status(404).json({ error: 'Sneaker not found on GOAT, KicksDB, or StockX' });
-          return;
-        }
-
-        discoveredStockxId = sxListing.urlKey || null;
-        discoverySource = 'stockx';
-
-        const goatByName = await goatScraper.searchProducts(sxListing.name, 3).catch(() => []);
-        if (goatByName.length > 0) {
-          discoveredGoatId = goatByName[0].sku || null;
-          logger.info({ styleCode, goatId: discoveredGoatId }, 'Found GOAT internal SKU via StockX name search');
-        }
-
-        listing = {
+      if (sxListing) {
+        addCandidate({
+          source: 'stockx',
+          matchType: 'partial',
           name: sxListing.name,
-          slug: sxListing.urlKey,
-          sku: styleCode,
+          brand: sxListing.brand || 'Unknown',
+          colorway: sxListing.colorway || '',
           lowestPriceCents: Math.round(sxListing.lowestAsk * 100),
           retailPriceCents: sxListing.retailPrice ? Math.round(sxListing.retailPrice * 100) : null,
-          instantShipPriceCents: null,
-          brand: sxListing.brand,
-          colorway: sxListing.colorway,
           imageUrl: sxListing.imageUrl || '',
-          url: sxListing.url,
-          timestamp: new Date(),
-        } as GOATListing;
+          goatId: null,
+          stockxId: sxListing.urlKey || null,
+        });
       }
     }
 
-    // Derive model from listing name (strip brand prefix and quoted colorway)
-    const colorwayMatch = listing.name.match(/['"]([^'"]+)['"]/);
-    const derivedColorway = colorwayMatch ? colorwayMatch[1] : (listing.colorway || '');
-    let cleanName = listing.name.replace(/['"][^'"]+['"]/, '').trim();
-    if (listing.brand) {
-      cleanName = cleanName.replace(new RegExp(listing.brand, 'i'), '').trim();
+    // ── Step 5: eBay fallback if still nothing ──────────────────────────────
+    if (candidates.length === 0) {
+      logger.info({ styleCode }, 'All scrapers empty — trying eBay catalog fallback');
+      const ebayResult = await ebayScraper.searchCatalogByStyleCode(styleCode).catch(() => null);
+
+      if (ebayResult) {
+        addCandidate({
+          source: 'ebay',
+          matchType: 'partial',
+          name: ebayResult.name,
+          brand: ebayResult.brand,
+          colorway: ebayResult.colorway,
+          lowestPriceCents: 0,
+          retailPriceCents: null,
+          imageUrl: '',
+          goatId: null,
+          stockxId: null,
+        });
+      }
     }
-    const model = cleanName.trim() || listing.name;
 
-    // Calculate tier
-    let tier = 3;
-    if (listing.retailPriceCents && listing.lowestPriceCents) {
-      const premium = (listing.lowestPriceCents / listing.retailPriceCents) - 1;
-      if (premium > 0.5) tier = 1;
-      else if (premium > 0.15) tier = 2;
+    if (candidates.length === 0) {
+      res.status(404).json({ error: 'Sneaker not found on GOAT, KicksDB, StockX, or eBay' });
+      return;
     }
 
-    const brand = listing.brand || 'Unknown';
-    const retailPrice = listing.retailPriceCents ? listing.retailPriceCents / 100 : null;
+    // ── Step 6: Save the best candidate to DB ──────────────────────────────
+    // Priority: first exact match (GOAT > KicksDB > StockX > eBay), else first partial
+    const toSave = candidates.find((c) => c.matchType === 'exact') || candidates[0];
+    const { model: savedModel, colorway: savedColorway } = parseName(toSave.name, toSave.brand);
+    const savedRetailPrice = toSave.retailPriceCents ? toSave.retailPriceCents / 100 : null;
+    const savedTier = calcTier(toSave.lowestPriceCents, toSave.retailPriceCents);
 
-    // Insert into DB (ON CONFLICT handles race conditions)
     const insertResult = await dbQuery<{ id: number }>(
       `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, goat_id, stockx_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (style_code) DO NOTHING
        RETURNING id`,
-      [styleCode, styleCode, brand, model, derivedColorway, retailPrice, tier, listing.imageUrl, discoveredGoatId, discoveredStockxId],
+      [styleCode, styleCode, toSave.brand, savedModel, savedColorway, savedRetailPrice,
+       savedTier, toSave.imageUrl || null, toSave.goatId, toSave.stockxId],
     );
 
-    let skuId: number;
+    let savedSkuId: number;
     if (insertResult.rows.length > 0) {
-      skuId = insertResult.rows[0].id;
+      savedSkuId = insertResult.rows[0].id;
     } else {
-      // Race condition: row already exists, re-query
-      const requery = await dbQuery<{ id: number }>(
-        `SELECT id FROM skus WHERE style_code = $1`,
-        [styleCode],
-      );
-      skuId = requery.rows[0].id;
+      const requery = await dbQuery<{ id: number }>(`SELECT id FROM skus WHERE style_code = $1`, [styleCode]);
+      savedSkuId = requery.rows[0].id;
     }
 
-    // Download and optimize image
-    let imageLocalPath: string | null = null;
-    let fileSize: number | null = null;
-    if (listing.imageUrl) {
+    // ── Step 7: Download image → S3 URL only ───────────────────────────────
+    let s3ImageUrl: string | null = null;
+    if (toSave.imageUrl) {
       try {
-        const imgResult = await imageProcessor.downloadAndOptimize(listing.imageUrl, styleCode);
+        const imgResult = await imageProcessor.downloadAndOptimize(toSave.imageUrl, styleCode);
         if (imgResult) {
-          imageLocalPath = imgResult.fullPath;
-          fileSize = imgResult.fileSize;
+          s3ImageUrl = imgResult.fullPath;
           await dbQuery(
             `UPDATE skus SET image_local_path = $1, image_file_size = $2, image_downloaded_at = NOW() WHERE id = $3`,
-            [imageLocalPath, fileSize, skuId],
+            [s3ImageUrl, imgResult.fileSize, savedSkuId],
           );
         }
       } catch (imgErr) {
-        logger.warn({ imgErr, styleCode }, 'Image download failed during lookup; continuing without image');
+        logger.warn({ imgErr, styleCode }, 'Image download failed during lookup');
       }
     }
 
-    const finalImageUrl = imageLocalPath || listing.imageUrl;
-    res.json({
-      discovered: true,
-      discovery_source: discoverySource,
-      sku: {
-        id: skuId,
+    // ── Step 8: Build results array ────────────────────────────────────────
+    const results = candidates.map((c) => {
+      const isSaved = c === toSave;
+      const { model, colorway } = parseName(c.name, c.brand);
+      const retailPrice = c.retailPriceCents ? c.retailPriceCents / 100 : null;
+      const tier = calcTier(c.lowestPriceCents, c.retailPriceCents);
+      const imgUrl = isSaved ? s3ImageUrl : null; // S3 URL only for saved entry; others have no image yet
+      return {
+        match_type: c.matchType,
+        source: c.source,
+        id: isSaved ? savedSkuId : null,
         sku_code: styleCode,
         style_code: styleCode,
-        brand,
+        brand: c.brand,
         model,
-        colorway: derivedColorway,
+        colorway,
         retail_price: retailPrice,
         tier,
-        image_url: finalImageUrl,
-        image_thumbnail_url: imageLocalPath
-          ? imageLocalPath.replace('/sneakers/', '/sneakers/thumbs/')
-          : null,
-        display_name: `${brand} ${model}${derivedColorway ? ' - ' + derivedColorway : ''}`,
-      },
+        image_url: imgUrl,
+        image_thumbnail_url: imgUrl ? imgUrl.replace('/sneakers/', '/sneakers/thumbs/') : null,
+        display_name: `${c.brand} ${model}${colorway ? ' - ' + colorway : ''}`,
+      };
     });
 
-    // Background: fetch prices after response is sent (fire-and-forget)
-    const newSku: SKU = {
-      id: skuId,
+    res.json({ discovered: true, results });
+
+    // ── Step 9: Background price fetch for the saved SKU ──────────────────
+    const savedSku: SKU = {
+      id: savedSkuId,
       sku_code: styleCode,
       style_code: styleCode,
-      brand,
-      model,
-      colorway: derivedColorway,
-      tier,
-      retail_price: retailPrice ?? undefined,
-      image_url: listing.imageUrl ?? undefined,
-      goat_id: discoveredGoatId ?? undefined,
-      stockx_id: discoveredStockxId ?? undefined,
+      brand: toSave.brand,
+      model: savedModel,
+      colorway: savedColorway,
+      tier: savedTier,
+      retail_price: savedRetailPrice ?? undefined,
+      goat_id: toSave.goatId ?? undefined,
+      stockx_id: toSave.stockxId ?? undefined,
     } as SKU;
 
     priceFetcher
-      .fetchAllPricesForSku(newSku)
-      .then((results: any) => {
-        logger.info(
-          { styleCode, ebay: results.ebay.success, goat: results.goat.success, stockx: results.stockx.success },
-          'Background price fetch complete for discovered SKU',
-        );
-      })
-      .catch((err: any) => logger.warn({ err, styleCode }, 'Background price fetch failed for discovered SKU'));
+      .fetchAllPricesForSku(savedSku)
+      .then((r: any) => logger.info(
+        { styleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
+        'Background price fetch complete',
+      ))
+      .catch((err: any) => logger.warn({ err, styleCode }, 'Background price fetch failed'));
   } catch (error) {
     logger.error({ error }, 'Failed to lookup SKU');
     res.status(500).json({ error: 'Internal server error' });

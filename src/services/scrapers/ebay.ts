@@ -264,6 +264,60 @@ export class EbayScraper {
   }
 
   /**
+   * Search eBay sold listings for catalog info by style code.
+   * Used as a last-resort fallback when GOAT, KicksDB, and StockX all fail.
+   * Extracts brand + model name from listing titles that contain the style code.
+   */
+  async searchCatalogByStyleCode(styleCode: string): Promise<{
+    name: string;
+    brand: string;
+    colorway: string;
+  } | null> {
+    try {
+      logger.info({ styleCode }, 'eBay catalog fallback: searching by style code');
+
+      const searchUrl = this.buildSearchUrl(styleCode, '1000'); // new condition for best titles
+      const html = await fetchUrl(searchUrl);
+      const $ = load(html);
+
+      const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+      const normalizedCode = normalize(styleCode);
+
+      const KNOWN_BRANDS = ['Nike', 'Adidas', 'Jordan', 'New Balance', 'Yeezy', 'Puma',
+        'Reebok', 'Converse', 'Vans', 'Asics', 'Hoka', 'Salomon', 'On'];
+
+      let best: { name: string; brand: string; colorway: string } | null = null;
+
+      $('.s-card').each((_i, el) => {
+        if (best) return; // stop after first match
+        const title = $(el).find('.s-card__title').text().trim();
+        if (!title) return;
+        // Only use listings whose title contains the style code (confirms it's the right shoe)
+        if (!normalize(title).includes(normalizedCode)) return;
+
+        const brand = KNOWN_BRANDS.find(b => title.toLowerCase().includes(b.toLowerCase())) || 'Unknown';
+        const colorwayMatch = title.match(/['"]([^'"]+)['"]/);
+        const colorway = colorwayMatch ? colorwayMatch[1] : '';
+        best = { name: title, brand, colorway };
+      });
+
+      if (best) {
+        logger.info({ styleCode, result: best }, 'eBay catalog fallback found result');
+      } else {
+        logger.info({ styleCode }, 'eBay catalog fallback found no matching listing');
+      }
+
+      return best;
+    } catch (error) {
+      logger.warn(
+        { styleCode, error: error instanceof Error ? error.message : String(error) },
+        'eBay catalog fallback failed',
+      );
+      return null;
+    }
+  }
+
+  /**
    * Get price statistics from listings
    */
   static getPriceStats(listings: eBayListing[]): {
