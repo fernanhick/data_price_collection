@@ -50,7 +50,8 @@
       "Bash(DB_SYNC=true DB_TARGET=ec2 tsx:*)",
       "Bash(DB_SYNC=true DB_TARGET=ec2 ./node_modules/.bin/tsx:*)",
       "Bash(pm2 show:*)",
-      "Bash(wait:*)"
+      "Bash(wait:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

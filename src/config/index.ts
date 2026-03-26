@@ -4,6 +4,18 @@ import { AppConfig } from '../types/index.js';
 // Load environment variables
 dotenv.config();
 
+// Select Convex/Clerk instance based on CONVEX_ENV (default: NODE_ENV)
+const convexEnv = process.env.CONVEX_ENV || process.env.NODE_ENV || 'development';
+const convexUrl = convexEnv === 'production'
+  ? (process.env.CONVEX_URL_PROD || process.env.CONVEX_URL || '')
+  : (process.env.CONVEX_URL_DEV  || process.env.CONVEX_URL || '');
+const convexJwksUrl = convexEnv === 'production'
+  ? (process.env.CONVEX_JWKS_URL_PROD || process.env.CONVEX_JWKS_URL || '')
+  : (process.env.CONVEX_JWKS_URL_DEV  || process.env.CONVEX_JWKS_URL || '');
+if (convexEnv !== 'development') {
+  console.log(`🔐 Convex env: ${convexEnv}`);
+}
+
 // Select database based on DB_TARGET: 'local' (default) or 'ec2'
 const dbTarget = process.env.DB_TARGET || 'local';
 const databaseUrl = dbTarget === 'ec2'
@@ -35,8 +47,8 @@ const config: AppConfig = {
   },
 
   convex: {
-    url: process.env.CONVEX_URL || '',
-    jwksUrl: process.env.CONVEX_JWKS_URL || '',
+    url: convexUrl,
+    jwksUrl: convexJwksUrl,
   },
 
   scraper: {
@@ -77,11 +89,7 @@ const config: AppConfig = {
 };
 
 // Validate required config
-const requiredVars = ['CONVEX_URL', 'CONVEX_JWKS_URL'];
-for (const varName of requiredVars) {
-  if (!process.env[varName]) {
-    console.warn(`⚠️  Environment variable ${varName} not set. Set it in .env file.`);
-  }
-}
+if (!convexUrl)     console.warn(`⚠️  Convex URL not set for env: ${convexEnv}`);
+if (!convexJwksUrl) console.warn(`⚠️  Convex JWKS URL not set for env: ${convexEnv}`);
 
 export default config;
