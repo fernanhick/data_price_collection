@@ -4,9 +4,16 @@ import logger from '../utils/logger.js';
 
 const { Pool } = pkg;
 
+// Use SSL with self-signed cert support for remote (non-localhost) connections
+const sslForUrl = (url: string | undefined) =>
+  url && !url.includes('localhost') && !url.includes('127.0.0.1')
+    ? { rejectUnauthorized: false }
+    : undefined;
+
 // Primary pool (DB_TARGET determines local vs ec2)
 const pool = new Pool({
   connectionString: config.database.url,
+  ssl: sslForUrl(config.database.url),
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -26,6 +33,7 @@ const secondaryUrl = syncEnabled
 const secondaryPool = secondaryUrl
   ? new Pool({
       connectionString: secondaryUrl,
+      ssl: sslForUrl(secondaryUrl),
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,

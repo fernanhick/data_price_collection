@@ -11,9 +11,9 @@ let cachedPublicKey: string | null = null;
 let cacheTime: number = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-// Development mode - use local keys instead of Convex
-const isDevelopment = process.env.NODE_ENV === 'development';
+// Local dev key mode: only when no JWKS URL is configured (pure offline dev without Clerk)
 const DEV_PUBLIC_KEY_PATH = path.join(process.cwd(), 'scripts', '.dev-keys', 'public.pem');
+const isDevelopment = !config.convex.jwksUrl && process.env.NODE_ENV === 'development';
 
 // Convert JWK to PEM format
 async function convertJWKToPEM(jwk: any): Promise<string> {
