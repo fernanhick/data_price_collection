@@ -317,6 +317,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     interface Candidate {
       source: 'goat' | 'kicksdb' | 'stockx' | 'ebay';
       matchType: 'exact' | 'partial';
+      actualStyleCode: string;
       name: string;
       brand: string;
       colorway: string;
@@ -342,6 +343,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       addCandidate({
         source: 'goat',
         matchType: normalize(l.sku) === normalize(styleCode) ? 'exact' : 'partial',
+        actualStyleCode: l.sku || styleCode,
         name: l.name,
         brand: l.brand || 'Unknown',
         colorway: l.colorway || '',
@@ -358,6 +360,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       addCandidate({
         source: 'kicksdb',
         matchType: normalize(l.styleId) === normalize(styleCode) ? 'exact' : 'partial',
+        actualStyleCode: l.styleId || styleCode,
         name: l.name,
         brand: l.brand || 'Unknown',
         colorway: l.colorway || '',
@@ -383,6 +386,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         addCandidate({
           source: 'stockx',
           matchType: 'partial',
+          actualStyleCode: sxListing.sku || styleCode,
           name: sxListing.name,
           brand: sxListing.brand || 'Unknown',
           colorway: sxListing.colorway || '',
@@ -404,6 +408,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         addCandidate({
           source: 'ebay',
           matchType: 'partial',
+          actualStyleCode: styleCode,
           name: ebayResult.name,
           brand: ebayResult.brand,
           colorway: ebayResult.colorway,
@@ -473,8 +478,8 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         match_type: c.matchType,
         source: c.source,
         id: isSaved ? savedSkuId : null,
-        sku_code: styleCode,
-        style_code: styleCode,
+        sku_code: c.actualStyleCode,
+        style_code: c.actualStyleCode,
         brand: c.brand,
         model,
         colorway,
