@@ -466,11 +466,44 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ styleCode, saved: savedIds.size, total: candidates.length }, 'Candidates saved to catalog');
 
-    // ── Step 7: Build results array ────────────────────────────────────────
+    // ── Step 7: Download images to S3 for all saved candidates (parallel) ──
+    const s3Urls = new Map<Candidate, string>();
+
+    const imageDownloads = [...savedIds.entries()]
+      .filter(([c]) => c.imageUrl)
+      .map(async ([c, skuId]) => {
+        try {
+          // Check if image already downloaded
+          const existing = await dbQuery<{ image_local_path: string | null }>(
+            `SELECT image_local_path FROM skus WHERE id = $1`, [skuId],
+          );
+          if (existing.rows[0]?.image_local_path) {
+            s3Urls.set(c, existing.rows[0].image_local_path);
+            return;
+          }
+
+          const imgResult = await imageProcessor.downloadAndOptimize(c.imageUrl, c.actualStyleCode);
+          if (imgResult) {
+            s3Urls.set(c, imgResult.fullPath);
+            await dbQuery(
+              `UPDATE skus SET image_local_path = $1, image_file_size = $2, image_downloaded_at = NOW() WHERE id = $3`,
+              [imgResult.fullPath, imgResult.fileSize, skuId],
+            );
+          }
+        } catch (imgErr) {
+          logger.warn({ imgErr, styleCode: c.actualStyleCode }, 'Image download failed for candidate');
+        }
+      });
+
+    await Promise.allSettled(imageDownloads);
+    logger.info({ styleCode, imagesDownloaded: s3Urls.size }, 'Image downloads complete');
+
+    // ── Step 8: Build results array ────────────────────────────────────────
     const discoveredResults = candidates.map((c) => {
       const { model, colorway } = parseName(c.name, c.brand);
       const retailPrice = c.retailPriceCents ? c.retailPriceCents / 100 : null;
       const tier = calcTier(c.lowestPriceCents, c.retailPriceCents);
+      const s3Url = s3Urls.get(c) || null;
       return {
         match_type: c.matchType,
         source: c.source,
@@ -485,8 +518,8 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         lowest_price_cents: c.lowestPriceCents,
         retail_price_cents: c.retailPriceCents,
         tier,
-        image_url: null,
-        image_thumbnail_url: null,
+        image_url: s3Url,
+        image_thumbnail_url: s3Url ? s3Url.replace('/sneakers/', '/sneakers/thumbs/') : null,
         source_image_url: c.imageUrl || null,
         goat_id: c.goatId,
         stockx_id: c.stockxId,
