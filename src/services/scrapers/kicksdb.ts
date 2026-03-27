@@ -46,14 +46,18 @@ export class KicksDBScraper {
       return [];
     }
 
-    return products.map((p: any) => ({
-      styleId: p.styleId || p.sku || p.slug || p.id || '',
-      name: p.primary_title || p.title || p.name || '',
-      brand: p.brand || '',
-      colorway: p.secondary_title || p.colorway || '',
-      retailPrice: p.retailPrice || null,
-      urlKey: p.slug || p.uuid || p.id || '',
-      imageUrl: p.image || p.thumbnail || p.media?.imageUrl || '',
-    }));
+    return products.map((p: any) => {
+      const imageUrl = p.image || p.thumbnail || p.media?.imageUrl || '';
+      logger.info({ styleCode, sku: p.sku || p.styleId, imageUrl: imageUrl || '(empty)', hasImage: !!p.image, hasThumbnail: !!p.thumbnail }, 'KicksDB product image data');
+      return {
+        styleId: p.styleId || p.sku || p.slug || p.id || '',
+        name: p.primary_title || p.title || p.name || '',
+        brand: p.brand || '',
+        colorway: p.secondary_title || p.colorway || '',
+        retailPrice: p.retailPrice || null,
+        urlKey: p.slug || p.uuid || p.id || '',
+        imageUrl,
+      };
+    });
   }
 }
