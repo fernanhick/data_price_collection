@@ -14,7 +14,7 @@ import imageProcessor from './services/imageProcessor.js';
 
 // Import routes
 import priceRoutes, { batchRouter as priceBatchRoutes } from './routes/prices.js';
-import skuRoutes from './routes/skus.js';
+import skuRoutes, { lookupRouter as skuLookupRoute } from './routes/skus.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import authRoutes from './routes/auth.js';
@@ -107,6 +107,7 @@ if (!config.s3.bucket) {
 app.use('/api/auth', authRoutes);
 app.use('/api/prices', priceBatchRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/skus/lookup', skuLookupRoute);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);

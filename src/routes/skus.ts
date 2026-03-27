@@ -14,6 +14,7 @@ const stockxScraper = new StockxScraper();
 const kicksdbScraper = new KicksDBScraper();
 
 const router = Router();
+export const lookupRouter = Router();
 
 /**
  * GET /api/skus
@@ -233,7 +234,7 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
  *
  * IMPORTANT: This route must be before /:id to avoid path collision
  */
-router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
+lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { style_code } = req.query;
 
