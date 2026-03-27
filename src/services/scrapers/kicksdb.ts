@@ -10,6 +10,7 @@ export interface KicksDBSearchResult {
   colorway: string;
   retailPrice: number | null;
   urlKey: string; // slug/uuid — used as stockx_id for future price fetches
+  imageUrl: string;
 }
 
 export class KicksDBScraper {
@@ -52,6 +53,7 @@ export class KicksDBScraper {
       colorway: p.secondary_title || p.colorway || '',
       retailPrice: p.retailPrice || null,
       urlKey: p.slug || p.uuid || p.id || '',
+      imageUrl: p.image || p.thumbnail || p.media?.imageUrl || '',
     }));
   }
 }

@@ -363,7 +363,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         colorway: l.colorway || '',
         lowestPriceCents: 0,
         retailPriceCents: l.retailPrice ? Math.round(l.retailPrice * 100) : null,
-        imageUrl: '',
+        imageUrl: l.imageUrl || '',
         goatId: null,
         stockxId: l.urlKey || null,
       });
