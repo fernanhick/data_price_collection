@@ -41,5 +41,22 @@ export const UpdateSKUSchema = z.object({
   image_local_path: z.string().max(255).optional().nullable(),
 });
 
+/**
+ * Zod schema for selecting a candidate from lookup results
+ */
+export const SelectCandidateSchema = z.object({
+  source: z.enum(['goat', 'kicksdb', 'stockx', 'ebay']),
+  style_code: z.string().min(1).max(50),
+  brand: z.string().min(1).max(100),
+  name: z.string().min(1).max(500),
+  colorway: z.string().max(255).default(''),
+  lowest_price_cents: z.number().int().min(0).default(0),
+  retail_price_cents: z.number().int().nullable().default(null),
+  source_image_url: z.string().max(1000).nullable().default(null),
+  goat_id: z.string().max(100).nullable().default(null),
+  stockx_id: z.string().max(100).nullable().default(null),
+});
+
 export type CreateSKUInput = z.infer<typeof CreateSKUSchema>;
 export type UpdateSKUInput = z.infer<typeof UpdateSKUSchema>;
+export type SelectCandidateInput = z.infer<typeof SelectCandidateSchema>;
