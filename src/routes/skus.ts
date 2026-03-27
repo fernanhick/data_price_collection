@@ -446,7 +446,6 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     // ── Step 7: Download image → S3 URL only ───────────────────────────────
-    logger.info({ styleCode, toSaveSource: toSave.source, toSaveImageUrl: toSave.imageUrl || '(empty)' }, 'Candidate selected for save — image URL check');
     let s3ImageUrl: string | null = null;
     if (toSave.imageUrl) {
       try {
