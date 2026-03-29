@@ -54,7 +54,7 @@ export class PriceUpdateScheduler {
     this.tier1Task = cron.schedule(config.scheduler.tier1Cron, async () => {
       logger.info('🚀 Starting Tier 1 price update (high-demand sneakers)');
       try {
-        await this.priceFetcher.fetchAllPrices(1);
+        await this.priceFetcher.fetchAllPrices(1, config.scheduler.skipStockX);
         logger.info('✅ Tier 1 price update completed');
       } catch (error) {
         logger.error(
@@ -77,7 +77,7 @@ export class PriceUpdateScheduler {
     this.tier2Task = cron.schedule(config.scheduler.tier2Cron, async () => {
       logger.info('🚀 Starting Tier 2 price update (medium-demand sneakers)');
       try {
-        await this.priceFetcher.fetchAllPrices(2);
+        await this.priceFetcher.fetchAllPrices(2, config.scheduler.skipStockX);
         logger.info('✅ Tier 2 price update completed');
       } catch (error) {
         logger.error(
@@ -100,7 +100,7 @@ export class PriceUpdateScheduler {
     this.tier3Task = cron.schedule(config.scheduler.tier3Cron, async () => {
       logger.info('🚀 Starting Tier 3 price update (long-tail sneakers)');
       try {
-        await this.priceFetcher.fetchAllPrices(3);
+        await this.priceFetcher.fetchAllPrices(3, config.scheduler.skipStockX);
         logger.info('✅ Tier 3 price update completed');
       } catch (error) {
         logger.error(

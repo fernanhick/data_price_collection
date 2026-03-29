@@ -243,7 +243,7 @@ export class PriceFetcher {
   /**
    * Fetch prices for all SKUs (respecting tier-based frequency)
    */
-  async fetchAllPrices(tier?: 1 | 2 | 3): Promise<void> {
+  async fetchAllPrices(tier?: 1 | 2 | 3, skipStockX = false): Promise<void> {
     try {
       let query = 'SELECT * FROM skus';
       const params: any[] = [];
@@ -258,10 +258,12 @@ export class PriceFetcher {
       const result = await dbQuery<SKU>(query, params);
       const skus = result.rows;
 
-      logger.info({ count: skus.length, tier }, 'Starting price fetch for SKUs from all sources');
+      logger.info({ count: skus.length, tier, skipStockX }, 'Starting price fetch for SKUs from all sources');
 
       for (const sku of skus) {
-        const results = await this.fetchAllPricesForSku(sku);
+        const results = skipStockX
+          ? { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } }
+          : await this.fetchAllPricesForSku(sku);
 
         const successCount = [results.ebay, results.goat, results.stockx].filter((r) => r.success).length;
 

@@ -205,6 +205,7 @@ export interface AppConfig {
   };
   scheduler: {
     enabled: boolean;
+    skipStockX: boolean;
     tier1Cron: string;
     tier2Cron: string;
     tier3Cron: string;

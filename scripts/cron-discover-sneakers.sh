@@ -23,10 +23,10 @@ DISCOVERY_TYPE="${1:-full}"  # 'full' or 'safe'
 # Log file
 if [ "$DISCOVERY_TYPE" = "safe" ]; then
     LOG_FILE="$LOG_DIR/safe-discovery-$TIMESTAMP.log"
-    SCRIPT_CMD="npm run sneaker:discover-safe"
+    SCRIPT_CMD="npm run discover:safe"
 else
     LOG_FILE="$LOG_DIR/full-discovery-$TIMESTAMP.log"
-    SCRIPT_CMD="npm run sneaker:discover"
+    SCRIPT_CMD="npm run discover"
 fi
 
 # Function to log messages
