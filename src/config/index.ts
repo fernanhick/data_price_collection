@@ -82,6 +82,11 @@ const config: AppConfig = {
   admin: {
     userIds: process.env.ADMIN_USER_IDS?.split(',').map((id) => id.trim()) || [],
   },
+  stockx: {
+    clientId: process.env.STOCKX_CLIENT_ID || '',
+    clientSecret: process.env.STOCKX_CLIENT_SECRET || '',
+    apiKey: process.env.STOCKX_API_KEY || '',
+  },
   s3: {
     bucket: process.env.S3_BUCKET || '',
     region: process.env.S3_REGION || 'eu-north-1',

@@ -164,6 +164,34 @@ async function runStockXTest() {
   }
 }
 
+async function runStockXApiTest() {
+  const { StockxApiScraper } = await import('../services/scrapers/stockxApi.js');
+  const scraper = new StockxApiScraper();
+
+  logger.info('Testing StockX official API client...');
+  const queries = ['Jordan 1 Bred', 'Yeezy 350 Zebra', 'Dunk Low Panda'];
+
+  for (const q of queries) {
+    logger.info(`\nSearching for: "${q}"`);
+    try {
+      const results = await scraper.searchProducts(q, 3);
+      if (results.length > 0) {
+        logger.info(`✅ Found ${results.length} results:`);
+        for (const r of results) {
+          logger.info(`  - ${r.name} (${r.sku}): $${r.lowestAsk}`);
+        }
+      } else {
+        logger.warn(`⚠️  No results for "${q}"`);
+      }
+    } catch (err) {
+      logger.error({ err: err instanceof Error ? err.message : String(err) }, `Failed for "${q}"`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 1100)); // respect 1 req/sec rate limit
+  }
+
+  logger.info('\nStockX API test complete.');
+}
+
 async function runEcmvTest() {
   const ecmvCalculator = (await import('../services/pricing/ecmvCalculator.js')).default;
 
@@ -210,6 +238,7 @@ Options:
     scraper          eBay + GOAT + DB integration tests
     stylecode        Style code normalization test
     stockx           StockX Puppeteer scraper test
+    stockx-api       StockX official API client test (requires OAuth setup)
     ecmv             ECMV calculation test
     all              Run all suites
 
@@ -236,6 +265,7 @@ Examples:
       if (suite === 'scraper' || suite === 'all') await runScraperTest();
       if (suite === 'stylecode' || suite === 'all') await runStyleCodeTest();
       if (suite === 'stockx' || suite === 'all') await runStockXTest();
+      if (suite === 'stockx-api') await runStockXApiTest();
       if (suite === 'ecmv' || suite === 'all') await runEcmvTest();
 
       logger.info('\n=== Test Summary ===');

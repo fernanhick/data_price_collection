@@ -106,4 +106,11 @@ CREATE TABLE IF NOT EXISTS job_runs (
 
 CREATE INDEX IF NOT EXISTS idx_job_runs_started ON job_runs(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_runs_status ON job_runs(status);
+
+-- App-level key/value token store (OAuth tokens, etc.)
+CREATE TABLE IF NOT EXISTS app_tokens (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
 `;

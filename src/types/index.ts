@@ -222,4 +222,9 @@ export interface AppConfig {
     region: string;
     cloudfrontUrl: string;
   };
+  stockx: {
+    clientId: string;
+    clientSecret: string;
+    apiKey: string;
+  };
 }
