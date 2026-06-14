@@ -127,7 +127,7 @@ export class StockxApiScraper {
         `/catalog/products/${productId}/variants`,
       );
 
-      logger.debug({ productId, variantCount: variants.variants?.length }, 'StockX variants fetched');
+      logger.debug({ productId, rawVariants: JSON.stringify(variants).slice(0, 500) }, 'StockX variants raw response');
 
       if (!variants.variants?.length) return { lowestAsk: null, highestBid: null };
 
