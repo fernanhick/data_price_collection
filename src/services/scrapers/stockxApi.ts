@@ -131,33 +131,29 @@ export class StockxApiScraper {
 
       if (!variants?.length) return { lowestAsk: null, highestBid: null };
 
-      let lowestAsk: number | null = null;
-      let highestBid: number | null = null;
+      // Pick a few mid-range variants (common sizes) rather than iterating all ~20
+      // Sizes are sorted smallest to largest — take up to 5 from the middle
+      const mid = Math.floor(variants.length / 2);
+      const sample = variants.slice(Math.max(0, mid - 2), mid + 3);
 
-      for (const variant of variants) {
+      for (const variant of sample) {
         try {
+          await new Promise((r) => setTimeout(r, 1100)); // respect 1 req/sec limit
           const market = await this.request<StockXMarketData>(
             `/catalog/products/${productId}/variants/${variant.variantId}/market-data`,
           );
           logger.debug({ variantId: variant.variantId, variantName: variant.variantName, market }, 'StockX market data');
 
           if (market.lowestAskAmount !== null && market.lowestAskAmount > 0) {
-            if (lowestAsk === null || market.lowestAskAmount < lowestAsk) {
-              lowestAsk = market.lowestAskAmount;
-            }
-          }
-
-          if (market.highestBidAmount !== null && market.highestBidAmount > 0) {
-            if (highestBid === null || market.highestBidAmount > highestBid) {
-              highestBid = market.highestBidAmount;
-            }
+            // Return on first valid price found — no need to check all sizes
+            return { lowestAsk: market.lowestAskAmount, highestBid: market.highestBidAmount };
           }
         } catch (err) {
           logger.debug({ variantId: variant.variantId, err: err instanceof Error ? err.message : String(err) }, 'StockX market data fetch failed for variant');
         }
       }
 
-      return { lowestAsk, highestBid };
+      return { lowestAsk: null, highestBid: null };
     } catch (err) {
       logger.debug({ productId, err: err instanceof Error ? err.message : String(err) }, 'StockX getMarketData failed');
       return { lowestAsk: null, highestBid: null };
