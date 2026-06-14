@@ -123,18 +123,18 @@ export class StockxApiScraper {
     productId: string,
   ): Promise<{ lowestAsk: number | null; highestBid: number | null }> {
     try {
-      const variants = await this.request<{ variants: StockXVariant[] }>(
+      const variants = await this.request<StockXVariant[]>(
         `/catalog/products/${productId}/variants`,
       );
 
-      logger.debug({ productId, rawVariants: JSON.stringify(variants).slice(0, 500) }, 'StockX variants raw response');
+      logger.debug({ productId, variantCount: variants?.length }, 'StockX variants fetched');
 
-      if (!variants.variants?.length) return { lowestAsk: null, highestBid: null };
+      if (!variants?.length) return { lowestAsk: null, highestBid: null };
 
       let lowestAsk: number | null = null;
       let highestBid: number | null = null;
 
-      for (const variant of variants.variants) {
+      for (const variant of variants) {
         try {
           const market = await this.request<StockXMarketData>(
             `/catalog/products/${productId}/variants/${variant.variantId}/market-data`,
