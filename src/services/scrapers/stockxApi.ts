@@ -127,6 +127,8 @@ export class StockxApiScraper {
         `/catalog/products/${productId}/variants`,
       );
 
+      logger.debug({ productId, variantCount: variants.variants?.length }, 'StockX variants fetched');
+
       if (!variants.variants?.length) return { lowestAsk: null, highestBid: null };
 
       let lowestAsk: number | null = null;
@@ -137,6 +139,7 @@ export class StockxApiScraper {
           const market = await this.request<StockXMarketData>(
             `/catalog/products/${productId}/variants/${variant.variantId}/market-data`,
           );
+          logger.debug({ variantId: variant.variantId, variantName: variant.variantName, market }, 'StockX market data');
 
           if (market.lowestAskAmount !== null && market.lowestAskAmount > 0) {
             if (lowestAsk === null || market.lowestAskAmount < lowestAsk) {
@@ -149,13 +152,14 @@ export class StockxApiScraper {
               highestBid = market.highestBidAmount;
             }
           }
-        } catch {
-          // Skip variants that fail
+        } catch (err) {
+          logger.debug({ variantId: variant.variantId, err: err instanceof Error ? err.message : String(err) }, 'StockX market data fetch failed for variant');
         }
       }
 
       return { lowestAsk, highestBid };
-    } catch {
+    } catch (err) {
+      logger.debug({ productId, err: err instanceof Error ? err.message : String(err) }, 'StockX getMarketData failed');
       return { lowestAsk: null, highestBid: null };
     }
   }
