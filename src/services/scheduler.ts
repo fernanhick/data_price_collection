@@ -45,8 +45,8 @@ export class PriceUpdateScheduler {
   }
 
   /**
-   * Tier 1: High-demand sneakers (4x daily)
-   * Schedule: 6am, 12pm, 6pm, 12am UTC
+   * Tier 1: High-demand sneakers (1x daily)
+   * Schedule: 5am UTC
    */
   private startTier1Schedule(): void {
     logger.info(`Tier 1 schedule: ${config.scheduler.tier1Cron}`);

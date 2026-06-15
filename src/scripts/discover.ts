@@ -20,6 +20,7 @@ import { GoatScraper } from '../services/scrapers/goat.js';
 import { query, closePool } from '../db/index.js';
 import logger from '../utils/logger.js';
 import imageProcessor from '../services/imageProcessor.js';
+import { normalizeBrand } from '../utils/brand.js';
 
 const QUERY_PRESETS: Record<string, string[]> = {
   safe: [
@@ -247,7 +248,7 @@ export async function discoverSneakers(options: DiscoverOptions = {}): Promise<D
 
         discovered.push({
           sku_code: normalizedSku,
-          brand: parsedSneaker.brand || listing.brand || 'Unknown',
+          brand: normalizeBrand(parsedSneaker.brand || listing.brand || 'Unknown'),
           model: parsedSneaker.model,
           colorway: parsedSneaker.colorway || listing.colorway || '',
           retail_price: listing.retailPriceCents ? listing.retailPriceCents / 100 : null,
@@ -262,7 +263,7 @@ export async function discoverSneakers(options: DiscoverOptions = {}): Promise<D
           if (!altDuplicate && !duplicates.has(altCode)) {
             discovered.push({
               sku_code: altCode,
-              brand: parsedSneaker.brand || listing.brand || 'Unknown',
+              brand: normalizeBrand(parsedSneaker.brand || listing.brand || 'Unknown'),
               model: parsedSneaker.model,
               colorway: parsedSneaker.colorway || listing.colorway || '',
               retail_price: listing.retailPriceCents ? listing.retailPriceCents / 100 : null,

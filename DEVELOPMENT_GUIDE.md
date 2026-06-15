@@ -59,7 +59,7 @@ LOG_LEVEL=info
 
 # Scheduler
 ENABLE_SCHEDULER=true
-TIER_1_CRON=0 6,12,18,0 * * *
+TIER_1_CRON=0 5 * * *
 TIER_2_CRON=0 14 * * *
 TIER_3_CRON=0 10 * * 1,4
 ```
@@ -130,7 +130,7 @@ Expected response:
   "environment": "development",
   "scheduler": {
     "enabled": true,
-    "tier1": { "running": true, "schedule": "0 6,12,18,0 * * *" },
+    "tier1": { "running": true, "schedule": "0 5 * * *" },
     "tier2": { "running": true, "schedule": "0 14 * * *" },
     "tier3": { "running": true, "schedule": "0 10 * * 1,4" }
   }
@@ -196,7 +196,7 @@ src/
 ```
 ┌──────────────────────────────────────────┐
 │      Scheduler (Tier-based)              │
-│  Tier 1: 4x/day  |  Tier 2: 1x/day     │
+│  Tier 1: 1x/day  |  Tier 2: 1x/day     │
 │                  |  Tier 3: 2x/week    │
 └──────────┬───────────────────────────────┘
            │
@@ -329,6 +329,22 @@ Set `SCRAPER_PROXY_URL` (format: `http://username:password@host:port`) to route
 StockX (Puppeteer) and GOAT (Algolia API) requests through a proxy, reducing the
 risk of IP-based blocking. Leave unset to use the server's own IP (current
 default behavior, no proxy).
+
+### Runbook: StockX/GOAT IP block (no proxy configured yet)
+
+Until `SCRAPER_PROXY_URL` is set up, the server's Elastic IP is the only IP
+StockX/GOAT ever see. If scrapes start failing consistently (StockX circuit
+breaker tripping every run, GOAT 403s), the IP is likely flagged. Quick reset:
+
+1. AWS Console → EC2 → Elastic IPs → select the IP attached to the instance.
+2. Actions → Disassociate address, then Actions → Associate address → pick a
+   new/different Elastic IP and attach it to the instance.
+3. No app restart needed — outbound requests immediately use the new IP.
+4. If you have a spare Elastic IP, swapping back and forth between two takes
+   seconds; otherwise allocate a new one (AWS allows a few free per account).
+
+This is a stopgap. Once `SCRAPER_PROXY_URL` is configured, requests route
+through the proxy and this step shouldn't be needed.
 
 ### Docker Build
 

@@ -4,7 +4,7 @@
  * Fetch prices for a specified number of sneakers from the catalog
  */
 
-import { PriceFetcher } from '../services/pricing/priceFetcher.js';
+import { PriceFetcher, StockxCircuitBreaker } from '../services/pricing/priceFetcher.js';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
 import { SKU } from '../types/index.js';
@@ -15,6 +15,10 @@ interface FetchOptions {
   tier?: 1 | 2 | 3;
   brand?: string;
   skipStockX?: boolean;
+  /** Process only SKUs where `id % chunkCount === chunkIndex` — lets a large
+   *  tier be spread across multiple days (e.g. 7 chunks run once each day). */
+  chunkIndex?: number;
+  chunkCount?: number;
 }
 
 async function fetchPricesManual(options: FetchOptions = {}) {
@@ -24,6 +28,8 @@ async function fetchPricesManual(options: FetchOptions = {}) {
     tier,
     brand,
     skipStockX = false,
+    chunkIndex,
+    chunkCount,
   } = options;
 
   try {
@@ -40,6 +46,11 @@ async function fetchPricesManual(options: FetchOptions = {}) {
     if (brand) {
       queryStr += ` AND brand ILIKE $${paramIndex++}`;
       params.push(`%${brand}%`);
+    }
+
+    if (chunkCount && chunkCount > 1) {
+      queryStr += ` AND (id % $${paramIndex++}) = $${paramIndex++}`;
+      params.push(chunkCount, chunkIndex ?? 0);
     }
 
     queryStr += ` ORDER BY tier ASC, created_at DESC`;
@@ -62,6 +73,7 @@ async function fetchPricesManual(options: FetchOptions = {}) {
     logger.info({ count: skus.length }, 'Found sneakers to fetch prices for');
 
     const priceFetcher = new PriceFetcher();
+    const stockxBreaker = new StockxCircuitBreaker();
     let successCount = 0;
     let failedCount = 0;
 
@@ -104,7 +116,7 @@ async function fetchPricesManual(options: FetchOptions = {}) {
           }
         } else {
           // Full fetch including StockX
-          results = await priceFetcher.fetchAllPricesForSku(sku);
+          results = await priceFetcher.fetchAllPricesForSku(sku, stockxBreaker);
 
           const ebaySuccess = results.ebay.success;
           const goatSuccess = results.goat.success;
@@ -186,6 +198,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       case '--skip-stockx':
         options.skipStockX = true;
         break;
+      case '--chunk': {
+        const [idxStr, countStr] = (args[++i] || '').split('/');
+        options.chunkIndex = parseInt(idxStr, 10);
+        options.chunkCount = parseInt(countStr, 10);
+        break;
+      }
       case '--help':
         console.log(`
 Manual Price Fetcher
@@ -201,6 +219,8 @@ Options:
   --tier <1|2|3>      Filter by tier (default: all tiers)
   --brand <name>      Filter by brand name (default: all brands)
   --skip-stockx       Skip StockX (faster, uses eBay + GOAT only)
+  --chunk <i>/<n>     Only process SKUs where id % n == i (spread a large
+                      tier across n runs, e.g. one chunk per day)
   --help              Show this help message
 
 Examples:
@@ -222,18 +242,23 @@ Examples:
   # Fetch prices for 3 Jordan sneakers (fast mode)
   tsx src/scripts/fetch-prices-manual.ts --brand Jordan --limit 3 --skip-stockx
 
+  # Spread tier 2 across 7 days — run this with i=0..6 on successive days
+  tsx src/scripts/fetch-prices-manual.ts --all --tier 2 --chunk 0/7
+
 Notes:
-  - StockX fetching has 10-second delays to avoid Cloudflare blocks
+  - StockX fetching has an 8-20 second randomized delay to avoid Cloudflare blocks
   - eBay and GOAT can be fetched in parallel (faster)
   - Use --skip-stockx for quick testing
   - Prices are stored in the database for historical tracking
   - The scheduler runs automatically in the background
+  - If StockX fails 3 times in a row, it's skipped for the rest of the run
+    (circuit breaker — avoids hammering a possibly-blocked IP)
 
 Rate Limiting:
   - eBay: 2-second delay between SKUs
   - GOAT: 2-second delay between SKUs
-  - StockX: 10-second delay (can trigger Cloudflare blocks)
-  - Total time estimate: ~15-20 seconds per SKU (full mode)
+  - StockX: 8-20 second randomized delay (can trigger Cloudflare blocks)
+  - Total time estimate: ~15-25 seconds per SKU (full mode)
   - Total time estimate: ~3-5 seconds per SKU (fast mode)
         `);
         process.exit(0);

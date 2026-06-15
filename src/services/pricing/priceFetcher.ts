@@ -5,8 +5,44 @@ import { GoatScraper } from '../scrapers/goat.js';
 import { StockxScraper } from '../scrapers/stockx.js';
 import { PriceSource, SKU } from '../../types/index.js';
 
-// Recommended delays between requests (in milliseconds)
-const STOCKX_DELAY_MS = 10000; // 10 seconds between StockX requests to avoid Cloudflare blocks
+// Randomized delay range between StockX requests (avoids Cloudflare blocks and
+// a fixed, easily-fingerprinted interval).
+const STOCKX_DELAY_MIN_MS = 8000;
+const STOCKX_DELAY_MAX_MS = 20000;
+
+// After this many consecutive StockX failures in a single run, stop hitting
+// StockX for the rest of the run — a streak of failures usually means the IP
+// got flagged, and continuing would just hammer a blocked IP.
+const STOCKX_FAILURE_THRESHOLD = 3;
+
+/**
+ * Tracks consecutive StockX failures across a batch run and trips once a
+ * blocked-IP pattern is likely, so the rest of the run skips StockX entirely.
+ */
+export class StockxCircuitBreaker {
+  private consecutiveFailures = 0;
+  private tripped = false;
+
+  get isOpen(): boolean {
+    return this.tripped;
+  }
+
+  recordResult(success: boolean): void {
+    if (success) {
+      this.consecutiveFailures = 0;
+      return;
+    }
+
+    this.consecutiveFailures++;
+    if (!this.tripped && this.consecutiveFailures >= STOCKX_FAILURE_THRESHOLD) {
+      this.tripped = true;
+      logger.warn(
+        { consecutiveFailures: this.consecutiveFailures },
+        'StockX circuit breaker tripped — skipping StockX for the rest of this run',
+      );
+    }
+  }
+}
 
 /**
  * Fetch and store prices for sneakers
@@ -196,9 +232,11 @@ export class PriceFetcher {
 
   /**
    * Fetch prices from all sources for a single SKU
-   * Note: StockX is fetched separately with delay to avoid Cloudflare blocks
+   * Note: StockX is fetched separately with a randomized delay to avoid Cloudflare blocks.
+   * Pass a shared `stockxBreaker` across a batch run to stop hitting StockX after
+   * repeated consecutive failures (likely IP block).
    */
-  async fetchAllPricesForSku(sku: SKU): Promise<{
+  async fetchAllPricesForSku(sku: SKU, stockxBreaker?: StockxCircuitBreaker): Promise<{
     ebay: { success: boolean; price?: number };
     goat: { success: boolean; price?: number };
     stockx: { success: boolean; price?: number };
@@ -209,11 +247,17 @@ export class PriceFetcher {
       this.fetchGoatPricesForSku(sku),
     ]);
 
-    // Add delay before StockX to avoid Cloudflare detection
-    await this.delay(STOCKX_DELAY_MS);
+    if (stockxBreaker?.isOpen) {
+      return { ebay: ebayResult, goat: goatResult, stockx: { success: false } };
+    }
+
+    // Add a randomized delay before StockX to avoid Cloudflare detection
+    const stockxDelay = STOCKX_DELAY_MIN_MS + Math.random() * (STOCKX_DELAY_MAX_MS - STOCKX_DELAY_MIN_MS);
+    await this.delay(stockxDelay);
 
     // Fetch StockX separately
     const stockxResult = await this.fetchStockxPricesForSku(sku);
+    stockxBreaker?.recordResult(stockxResult.success);
 
     return {
       ebay: ebayResult,
@@ -260,10 +304,12 @@ export class PriceFetcher {
 
       logger.info({ count: skus.length, tier, skipStockX }, 'Starting price fetch for SKUs from all sources');
 
+      const stockxBreaker = new StockxCircuitBreaker();
+
       for (const sku of skus) {
         const results = skipStockX
           ? { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } }
-          : await this.fetchAllPricesForSku(sku);
+          : await this.fetchAllPricesForSku(sku, stockxBreaker);
 
         const successCount = [results.ebay, results.goat, results.stockx].filter((r) => r.success).length;
 

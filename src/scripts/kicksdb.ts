@@ -21,6 +21,7 @@
 import dotenv from 'dotenv';
 import { query, closePool } from '../db/index.js';
 import logger from '../utils/logger.js';
+import { normalizeBrand } from '../utils/brand.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -231,7 +232,7 @@ function mapProductToSKU(product: KicksDBProduct) {
   return {
     sku_code: styleCode,
     style_code: styleCode,
-    brand: brand || 'Unknown',
+    brand: normalizeBrand(brand || 'Unknown'),
     model: model || 'Unknown Model',
     colorway,
     release_date: releaseDate,
