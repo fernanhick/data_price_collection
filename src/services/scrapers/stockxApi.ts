@@ -14,6 +14,11 @@ import { getAccessToken } from '../stockx/tokenManager.js';
 
 const API_BASE = 'https://api.stockx.com/v2';
 
+// Normalize a style code for comparison: "DD1391-100" / "dd1391 100" -> "DD1391100"
+function normalizeStyleCode(s: string): string {
+  return s.toUpperCase().replace(/[-\s]/g, '');
+}
+
 interface StockXProduct {
   productId: string;
   brand: string;
@@ -83,7 +88,26 @@ export class StockxApiScraper {
         return [];
       }
 
-      const product = data.products[0];
+      // When the query looks like a style code (no spaces), require an exact
+      // styleId match — StockX search can return adjacent/unrelated products,
+      // and taking products[0] risks attaching price data to the wrong SKU.
+      let product: StockXProduct | undefined;
+      if (/\s/.test(query)) {
+        product = data.products[0];
+      } else {
+        const normalizedQuery = normalizeStyleCode(query);
+        product = data.products.find(
+          (p) => p.styleId && normalizeStyleCode(p.styleId) === normalizedQuery,
+        );
+        if (!product) {
+          logger.info(
+            { query, candidates: data.products.map((p) => p.styleId) },
+            'StockX API search returned products but none match the style code exactly',
+          );
+          return [];
+        }
+      }
+
       const { lowestAsk, highestBid } = await this.getMarketData(product.productId);
 
       const listing: StockXListing = {
