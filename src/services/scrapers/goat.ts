@@ -1,5 +1,7 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import logger from '../../utils/logger.js';
+import config from '../../config/index.js';
 import { GOATListing } from '../../types/index.js';
 
 /**
@@ -12,6 +14,17 @@ export class GoatScraper {
   private readonly algoliaUrl = 'https://2fwotdvm2o-dsn.algolia.net/1/indexes/product_variants_v2/query';
   private readonly algoliaApiKey = 'ac96de6fef0e02bb95d433d8d5c7038a';
   private readonly algoliaAppId = '2FWOTDVM2O';
+
+  /**
+   * Proxy options to merge into axios requests, if SCRAPER_PROXY_URL is configured.
+   */
+  private get proxyAxiosOptions(): Partial<AxiosRequestConfig> {
+    if (!config.scraper.proxyUrl) return {};
+    return {
+      httpsAgent: new HttpsProxyAgent(config.scraper.proxyUrl),
+      proxy: false,
+    };
+  }
 
   /**
    * Search for sneaker prices on GOAT
@@ -39,6 +52,7 @@ export class GoatScraper {
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
           timeout: 10000,
+          ...this.proxyAxiosOptions,
         },
       );
 
@@ -97,6 +111,7 @@ export class GoatScraper {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           },
           timeout: 10000,
+          ...this.proxyAxiosOptions,
         },
       );
 

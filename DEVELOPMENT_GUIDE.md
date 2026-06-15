@@ -309,6 +309,27 @@ export class GOATScraper {
 
 ## Deployment
 
+### System Dependencies for Puppeteer/Chrome (StockX scraper)
+
+The `StockxScraper` launches Puppeteer's bundled headless Chrome, which requires
+several system shared libraries (GTK, X11, audio, etc.) that are NOT installed
+by default on minimal Ubuntu/Debian server images (e.g. EC2 instances). Without
+them, Chrome fails to launch with `error while loading shared libraries: ...`
+and StockX price fetches silently fail.
+
+On any new deployment server, run:
+
+```bash
+./scripts/install-chrome-deps.sh
+```
+
+### Proxy for StockX/GOAT (optional)
+
+Set `SCRAPER_PROXY_URL` (format: `http://username:password@host:port`) to route
+StockX (Puppeteer) and GOAT (Algolia API) requests through a proxy, reducing the
+risk of IP-based blocking. Leave unset to use the server's own IP (current
+default behavior, no proxy).
+
 ### Docker Build
 
 ```bash

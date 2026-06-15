@@ -1,5 +1,6 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import logger from '../../utils/logger.js';
+import config from '../../config/index.js';
 import { StockXListing } from '../../types/index.js';
 
 /**
@@ -10,6 +11,7 @@ import { StockXListing } from '../../types/index.js';
  */
 export class StockxScraper {
   private browser: Browser | null = null;
+  private proxyAuth: { username: string; password: string } | null = null;
   private readonly baseUrl = 'https://stockx.com';
 
   private readonly userAgents = [
@@ -33,17 +35,31 @@ export class StockxScraper {
       this.browser = null;
     }
 
+    const args = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--window-size=1920,1080',
+      '--disable-blink-features=AutomationControlled',
+    ];
+
+    this.proxyAuth = null;
+    if (config.scraper.proxyUrl) {
+      const proxy = new URL(config.scraper.proxyUrl);
+      args.push(`--proxy-server=${proxy.protocol}//${proxy.host}`);
+      if (proxy.username) {
+        this.proxyAuth = {
+          username: decodeURIComponent(proxy.username),
+          password: decodeURIComponent(proxy.password),
+        };
+      }
+    }
+
     this.browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920,1080',
-        '--disable-blink-features=AutomationControlled',
-      ],
+      args,
     });
 
     return this.browser;
@@ -73,6 +89,10 @@ export class StockxScraper {
 
       const browser = await this.getBrowser();
       page = await browser.newPage();
+
+      if (this.proxyAuth) {
+        await page.authenticate(this.proxyAuth);
+      }
 
       // Set a randomized user agent
       await page.setUserAgent(this.getRandomUserAgent());

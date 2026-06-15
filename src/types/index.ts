@@ -193,6 +193,7 @@ export interface AppConfig {
   scraper: {
     timeoutMs: number;
     retryAttempts: number;
+    proxyUrl?: string;
     ebay?: {
       conditionCodes?: string[];
       minConditionThreshold?: number;

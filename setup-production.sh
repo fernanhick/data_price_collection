@@ -17,8 +17,13 @@ if [ "$EUID" -eq 0 ]; then
    exit 1
 fi
 
-# Step 1: Install PM2
-echo "Step 1: Installing PM2..."
+# Step 1: Install Chrome/Puppeteer system dependencies (required for StockX scraper)
+echo "Step 1: Installing Chrome/Puppeteer system dependencies..."
+./scripts/install-chrome-deps.sh
+
+# Step 2: Install PM2
+echo ""
+echo "Step 2: Installing PM2..."
 if ! command -v pm2 &> /dev/null; then
     npm install -g pm2
     echo "✅ PM2 installed"
@@ -26,33 +31,33 @@ else
     echo "✅ PM2 already installed"
 fi
 
-# Step 2: Stop any existing node processes
+# Step 3: Stop any existing node processes
 echo ""
-echo "Step 2: Stopping existing processes..."
+echo "Step 3: Stopping existing processes..."
 pkill -f "node.*src/index" || echo "No existing processes found"
 sleep 2
 
-# Step 3: Ensure project is built
+# Step 4: Ensure project is built
 echo ""
-echo "Step 3: Building project..."
+echo "Step 4: Building project..."
 npm run build
 echo "✅ Project built"
 
-# Step 4: Start with PM2
+# Step 5: Start with PM2
 echo ""
-echo "Step 4: Starting API with PM2..."
+echo "Step 5: Starting API with PM2..."
 pm2 delete sneaker-api 2>/dev/null || true
 pm2 start dist/src/index.js --name sneaker-api
 pm2 save
 echo "✅ API started with PM2"
 
-# Step 5: Setup PM2 startup
+# Step 6: Setup PM2 startup
 echo ""
-echo "Step 5: Setting up PM2 to start on boot..."
+echo "Step 6: Setting up PM2 to start on boot..."
 echo "Note: This will require sudo and will display a command for you to run"
 pm2 startup
 
-# Step 6: Check status
+# Step 7: Check status
 echo ""
 echo "==================================="
 echo "Setup Complete! 🎉"
