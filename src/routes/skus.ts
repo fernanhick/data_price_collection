@@ -320,19 +320,13 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     );
     const dbResults = existing.rows.map(formatDbRow);
 
-    // ── Step 2: GOAT + KicksDB in parallel ─────────────────────────────────
-    logger.info({ styleCode }, 'Running parallel GOAT + KicksDB discovery');
+    // ── Step 2: GOAT discovery ──────────────────────────────────────────────
+    logger.info({ styleCode }, 'Running GOAT discovery');
 
-    const [goatSettled, kdbSettled] = await Promise.allSettled([
-      goatScraper.searchForDiscovery(styleCode, 10),
-      kicksdbScraper.searchByStyleCode(styleCode, 10).catch((err) => {
-        logger.warn({ err, styleCode }, 'KicksDB lookup failed');
-        return [];
-      }),
-    ]);
-
-    const goatListings = goatSettled.status === 'fulfilled' ? goatSettled.value : [];
-    const kdbListings  = kdbSettled.status  === 'fulfilled' ? kdbSettled.value  : [];
+    const goatListings = await goatScraper.searchForDiscovery(styleCode, 10).catch((err) => {
+      logger.warn({ err, styleCode }, 'GOAT lookup failed');
+      return [];
+    });
 
     // ── Step 3: Classify + deduplicate candidates ───────────────────────────
     const seen = new Set<string>();
@@ -361,22 +355,6 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    for (const l of kdbListings) {
-      addCandidate({
-        source: 'kicksdb',
-        matchType: normalize(l.styleId) === normalize(styleCode) ? 'exact' : 'partial',
-        actualStyleCode: l.styleId || styleCode,
-        name: l.name,
-        brand: l.brand || 'Unknown',
-        colorway: l.colorway || '',
-        lowestPriceCents: 0,
-        retailPriceCents: l.retailPrice ? Math.round(l.retailPrice * 100) : null,
-        imageUrl: l.imageUrl || '',
-        goatId: null,
-        stockxId: l.urlKey || null,
-      });
-    }
-
     const exactCandidates = candidates.filter((c) => c.matchType === 'exact');
 
     // ── Step 4: StockX fallback if no exact matches ─────────────────────────
@@ -400,6 +378,31 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
           imageUrl: sxListing.imageUrl || '',
           goatId: null,
           stockxId: sxListing.urlKey || null,
+        });
+      }
+    }
+
+    // ── Step 4b: KicksDB fallback if GOAT + StockX both empty ───────────────
+    if (candidates.length === 0 && dbResults.length === 0) {
+      logger.info({ styleCode }, 'No results from GOAT/StockX — trying KicksDB');
+      const kdbListings = await kicksdbScraper.searchByStyleCode(styleCode, 10).catch((err) => {
+        logger.warn({ err, styleCode }, 'KicksDB lookup failed');
+        return [];
+      });
+
+      for (const l of kdbListings) {
+        addCandidate({
+          source: 'kicksdb',
+          matchType: normalize(l.styleId) === normalize(styleCode) ? 'exact' : 'partial',
+          actualStyleCode: l.styleId || styleCode,
+          name: l.name,
+          brand: l.brand || 'Unknown',
+          colorway: l.colorway || '',
+          lowestPriceCents: 0,
+          retailPriceCents: l.retailPrice ? Math.round(l.retailPrice * 100) : null,
+          imageUrl: l.imageUrl || '',
+          goatId: null,
+          stockxId: l.urlKey || null,
         });
       }
     }
@@ -433,6 +436,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 
     // ── Step 6: Save all valid candidates to DB (catalog growth) ────────────
     const savedIds = new Map<Candidate, number>();
+    const newlyInserted = new Map<Candidate, number>(); // only net-new rows
 
     for (const c of candidates) {
       if (!isValidCandidate(c)) continue;
@@ -453,6 +457,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 
         if (insertResult.rows.length > 0) {
           savedIds.set(c, insertResult.rows[0].id);
+          newlyInserted.set(c, insertResult.rows[0].id);
         } else {
           const requery = await dbQuery<{ id: number }>(
             `SELECT id FROM skus WHERE style_code = $1`, [c.actualStyleCode],
@@ -497,6 +502,32 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 
     await Promise.allSettled(imageDownloads);
     logger.info({ styleCode, imagesDownloaded: s3Urls.size }, 'Image downloads complete');
+
+    // ── Step 7b: Background price fetch for newly inserted SKUs ───────────
+    for (const [c, skuId] of newlyInserted) {
+      const { model, colorway } = parseName(c.name, c.brand);
+      const retailPrice = c.retailPriceCents ? c.retailPriceCents / 100 : null;
+      const tier = calcTier(c.lowestPriceCents, c.retailPriceCents);
+      const newSku = {
+        id: skuId,
+        sku_code: c.actualStyleCode,
+        style_code: c.actualStyleCode,
+        brand: c.brand,
+        model,
+        colorway,
+        tier,
+        retail_price: retailPrice ?? undefined,
+        goat_id: c.goatId ?? undefined,
+        stockx_id: c.stockxId ?? undefined,
+      } as SKU;
+      priceFetcher
+        .fetchAllPricesForSku(newSku)
+        .then((r: any) => logger.info(
+          { styleCode: c.actualStyleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
+          'Background price fetch complete for new SKU',
+        ))
+        .catch((err: any) => logger.warn({ err, styleCode: c.actualStyleCode }, 'Background price fetch failed for new SKU'));
+    }
 
     // ── Step 8: Build results array ────────────────────────────────────────
     const discoveredResults = candidates.map((c) => {
