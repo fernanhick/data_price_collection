@@ -75,10 +75,11 @@ export class PriceUpdateScheduler {
     logger.info(`Tier 2 schedule: ${config.scheduler.tier2Cron}`);
 
     this.tier2Task = cron.schedule(config.scheduler.tier2Cron, async () => {
-      logger.info('🚀 Starting Tier 2 price update (medium-demand sneakers)');
+      const slot = Math.floor(Date.now() / 86400000) % 3;
+      logger.info({ slot }, '🚀 Starting Tier 2 price update (medium-demand sneakers, rotation 1/3)');
       try {
-        await this.priceFetcher.fetchAllPrices(2, config.scheduler.skipStockX);
-        logger.info('✅ Tier 2 price update completed');
+        await this.priceFetcher.fetchAllPrices(2, config.scheduler.skipStockX, slot);
+        logger.info({ slot }, '✅ Tier 2 price update completed');
       } catch (error) {
         logger.error(
           { error: error instanceof Error ? error.message : String(error) },

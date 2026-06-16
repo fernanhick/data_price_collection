@@ -287,16 +287,23 @@ export class PriceFetcher {
   /**
    * Fetch prices for all SKUs (respecting tier-based frequency)
    */
-  async fetchAllPrices(tier?: 1 | 2 | 3, skipStockX = false): Promise<void> {
+  async fetchAllPrices(tier?: 1 | 2 | 3, skipStockX = false, rotationSlot?: number): Promise<void> {
     try {
       let query = 'SELECT * FROM skus';
       const params: any[] = [];
+      const conditions: string[] = [];
 
       if (tier) {
-        query += ' WHERE tier = $1';
+        conditions.push(`tier = $${params.length + 1}`);
         params.push(tier);
       }
 
+      if (rotationSlot !== undefined) {
+        conditions.push(`id % 3 = $${params.length + 1}`);
+        params.push(rotationSlot);
+      }
+
+      if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
       query += ' ORDER BY tier ASC, model ASC';
 
       const result = await dbQuery<SKU>(query, params);
