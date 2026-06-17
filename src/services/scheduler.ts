@@ -9,12 +9,16 @@ import notifier from './notifier.js';
 import { refreshUpcomingReleases } from './releases/upcomingReleases.js';
 
 /**
- * Price Update Scheduler
+ * Price Update Scheduler (all times UTC)
  *
- * Manages tier-based price update schedules:
- * - Tier 1 (20 popular): 4x daily
- * - Tier 2 (80+ medium): 1x daily
- * - Tier 3 (long-tail): 2x weekly
+ * Heavy Puppeteer/Chrome scrapers are packed into the global (US+EU) pre-dawn
+ * lull and spaced so no two ever run at once (the box is 1GB; concurrent Chrome
+ * = OOM). ECMV is internal calc (no Chrome) so it runs through the day.
+ * - Tier 1 (popular):    03:00 daily
+ * - Releases (HTTP):     04:00 daily
+ * - Tier 2 (medium ⅓):   05:00 daily
+ * - Tier 3 (long-tail):  07:00 Mon & Thu
+ * - ECMV (recompute):    00:00, 06:00, 12:00, 18:00
  */
 export class PriceUpdateScheduler {
   private priceFetcher = new PriceFetcher();
@@ -51,7 +55,7 @@ export class PriceUpdateScheduler {
 
   /**
    * Tier 1: High-demand sneakers (1x daily)
-   * Schedule: 5am UTC
+   * Schedule: 03:00 UTC
    */
   private startTier1Schedule(): void {
     logger.info(`Tier 1 schedule: ${config.scheduler.tier1Cron}`);
@@ -74,8 +78,8 @@ export class PriceUpdateScheduler {
   }
 
   /**
-   * Tier 2: Medium-demand sneakers (1x daily)
-   * Schedule: 2pm UTC
+   * Tier 2: Medium-demand sneakers (1x daily, ⅓ rotation)
+   * Schedule: 05:00 UTC
    */
   private startTier2Schedule(): void {
     logger.info(`Tier 2 schedule: ${config.scheduler.tier2Cron}`);
@@ -100,7 +104,7 @@ export class PriceUpdateScheduler {
 
   /**
    * Tier 3: Long-tail sneakers (2x weekly)
-   * Schedule: Monday & Thursday at 10am UTC
+   * Schedule: Monday & Thursday at 07:00 UTC
    */
   private startTier3Schedule(): void {
     logger.info(`Tier 3 schedule: ${config.scheduler.tier3Cron}`);
@@ -124,7 +128,8 @@ export class PriceUpdateScheduler {
 
   /**
    * ECMV Calculation: Calculate ECMV for recently updated SKUs
-   * Schedule: Every 6 hours, 1 hour after tier1 price fetches (7am, 1pm, 7pm, 1am UTC)
+   * Schedule: Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC), offset from all scraper starts
+   * Internal calc only (no Chrome), so it is safe to run during the day.
    * Only processes SKUs with price updates in last 24 hours (efficient)
    */
   private startECMVSchedule(): void {
@@ -178,7 +183,7 @@ export class PriceUpdateScheduler {
 
   /**
    * Upcoming Releases: refresh the upcoming-release calendar from the source.
-   * Schedule: 6am UTC daily (after Tier 1 price fetches).
+   * Schedule: 04:00 UTC daily (light HTTP fetch, no Chrome).
    */
   private startReleasesSchedule(): void {
     logger.info(`Upcoming releases schedule: ${config.scheduler.releasesCron}`);

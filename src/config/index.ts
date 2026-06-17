@@ -70,11 +70,13 @@ const config: AppConfig = {
   scheduler: {
     enabled: process.env.ENABLE_SCHEDULER === 'true',
     skipStockX: process.env.SKIP_STOCKX === 'true',
-    tier1Cron: process.env.TIER_1_CRON || '0 4 * * *',
-    tier2Cron: process.env.TIER_2_CRON || '0 14 * * *',
-    tier3Cron: process.env.TIER_3_CRON || '0 10 * * 1,4',
-    ecmvCron: process.env.ECMV_CRON || '0 7,13,19,1 * * *',
-    releasesCron: process.env.RELEASES_CRON || '0 6 * * *',
+    // Heavy Chrome scrapers packed into the global (US+EU) pre-dawn lull,
+    // spaced so no two ever overlap. ECMV (internal calc) runs every 6h.
+    tier1Cron: process.env.TIER_1_CRON || '0 3 * * *',
+    tier2Cron: process.env.TIER_2_CRON || '0 5 * * *',
+    tier3Cron: process.env.TIER_3_CRON || '0 7 * * 1,4',
+    ecmvCron: process.env.ECMV_CRON || '0 0,6,12,18 * * *',
+    releasesCron: process.env.RELEASES_CRON || '0 4 * * *',
   },
 
   logging: {
