@@ -51,7 +51,15 @@
       "Bash(DB_SYNC=true DB_TARGET=ec2 ./node_modules/.bin/tsx:*)",
       "Bash(pm2 show:*)",
       "Bash(wait:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(python3 -m json.tool)",
+      "WebFetch(domain:developer.stockx.com)",
+      "WebFetch(domain:dlthub.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:kicks.dev)",
+      "WebFetch(domain:apitracker.io)",
+      "WebFetch(domain:docs.restock.gg)",
+      "WebFetch(domain:www.npmjs.com)"
     ]
   }
 }
