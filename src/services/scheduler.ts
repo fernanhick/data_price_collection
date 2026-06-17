@@ -5,6 +5,7 @@ import { PriceFetcher } from './pricing/priceFetcher.js';
 import ecmvPersistence from './pricing/ecmvPersistence.js';
 import { query as dbQuery } from '../db/index.js';
 import { SKU } from '../types/index.js';
+import notifier from './notifier.js';
 
 /**
  * Price Update Scheduler
@@ -53,15 +54,16 @@ export class PriceUpdateScheduler {
 
     this.tier1Task = cron.schedule(config.scheduler.tier1Cron, async () => {
       logger.info('🚀 Starting Tier 1 price update (high-demand sneakers)');
+      const start = Date.now();
       try {
-        await this.priceFetcher.fetchAllPrices(1, config.scheduler.skipStockX);
+        const count = await this.priceFetcher.fetchAllPrices(1, config.scheduler.skipStockX);
         logger.info('✅ Tier 1 price update completed');
+        await notifier.scrapeComplete('Tier 1', count ?? 0, Date.now() - start);
       } catch (error) {
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error) },
-          '❌ Tier 1 price update failed',
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, '❌ Tier 1 price update failed');
         await this.logFetchFailure('tier1');
+        await notifier.scrapeError('Tier 1', msg);
       }
     });
     this.tier1Running = true;
@@ -77,15 +79,16 @@ export class PriceUpdateScheduler {
     this.tier2Task = cron.schedule(config.scheduler.tier2Cron, async () => {
       const slot = Math.floor(Date.now() / 86400000) % 3;
       logger.info({ slot }, '🚀 Starting Tier 2 price update (medium-demand sneakers, rotation 1/3)');
+      const start = Date.now();
       try {
-        await this.priceFetcher.fetchAllPrices(2, config.scheduler.skipStockX, slot);
+        const count = await this.priceFetcher.fetchAllPrices(2, config.scheduler.skipStockX, slot);
         logger.info({ slot }, '✅ Tier 2 price update completed');
+        await notifier.scrapeComplete('Tier 2', count ?? 0, Date.now() - start);
       } catch (error) {
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error) },
-          '❌ Tier 2 price update failed',
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, '❌ Tier 2 price update failed');
         await this.logFetchFailure('tier2');
+        await notifier.scrapeError('Tier 2', msg);
       }
     });
     this.tier2Running = true;
@@ -100,15 +103,16 @@ export class PriceUpdateScheduler {
 
     this.tier3Task = cron.schedule(config.scheduler.tier3Cron, async () => {
       logger.info('🚀 Starting Tier 3 price update (long-tail sneakers)');
+      const start = Date.now();
       try {
-        await this.priceFetcher.fetchAllPrices(3, config.scheduler.skipStockX);
+        const count = await this.priceFetcher.fetchAllPrices(3, config.scheduler.skipStockX);
         logger.info('✅ Tier 3 price update completed');
+        await notifier.scrapeComplete('Tier 3', count ?? 0, Date.now() - start);
       } catch (error) {
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error) },
-          '❌ Tier 3 price update failed',
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, '❌ Tier 3 price update failed');
         await this.logFetchFailure('tier3');
+        await notifier.scrapeError('Tier 3', msg);
       }
     });
     this.tier3Running = true;
@@ -159,11 +163,10 @@ export class PriceUpdateScheduler {
           '✅ ECMV calculation completed',
         );
       } catch (error) {
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error) },
-          '❌ ECMV calculation failed',
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, '❌ ECMV calculation failed');
         await this.logFetchFailure('ecmv');
+        await notifier.ecmvError(msg);
       }
     });
     this.ecmvRunning = true;

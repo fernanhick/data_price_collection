@@ -287,7 +287,7 @@ export class PriceFetcher {
   /**
    * Fetch prices for all SKUs (respecting tier-based frequency)
    */
-  async fetchAllPrices(tier?: 1 | 2 | 3, skipStockX = false, rotationSlot?: number): Promise<void> {
+  async fetchAllPrices(tier?: 1 | 2 | 3, skipStockX = false, rotationSlot?: number): Promise<number> {
     try {
       let query = 'SELECT * FROM skus';
       const params: any[] = [];
@@ -337,11 +337,13 @@ export class PriceFetcher {
       }
 
       logger.info({ count: skus.length }, 'Price fetch completed for all SKUs');
+      return skus.length;
     } catch (error) {
       logger.error(
         { error: error instanceof Error ? error.message : String(error) },
         'Failed to fetch all prices',
       );
+      return 0;
     }
   }
 
