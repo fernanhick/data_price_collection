@@ -14,6 +14,21 @@ export class StockxScraper {
   private proxyAuth: { username: string; password: string } | null = null;
   private readonly baseUrl = 'https://stockx.com';
 
+  // Serialize all scrapes: only one headless Chrome may run at a time, so a
+  // scheduled tier job and an on-lookup price fetch can never spawn parallel
+  // browsers — the multiplier that OOM-killed the 1GB instance.
+  private scrapeChain: Promise<unknown> = Promise.resolve();
+
+  private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.scrapeChain.then(fn, fn);
+    // Keep the chain alive regardless of this run's outcome.
+    this.scrapeChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   private readonly userAgents = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -41,8 +56,15 @@ export class StockxScraper {
       '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
       '--disable-gpu',
-      '--window-size=1920,1080',
+      '--window-size=1280,800',
       '--disable-blink-features=AutomationControlled',
+      // Memory-thrifty flags for the 1GB instance
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-features=site-per-process',
+      '--js-flags=--max-old-space-size=256',
     ];
 
     this.proxyAuth = null;
@@ -82,6 +104,10 @@ export class StockxScraper {
    * @returns Array of StockX listings with price data
    */
   async searchProducts(query: string, maxResults: number = 10): Promise<StockXListing[]> {
+    return this.runExclusive(() => this._searchProducts(query, maxResults));
+  }
+
+  private async _searchProducts(query: string, maxResults: number = 10): Promise<StockXListing[]> {
     let page: Page | null = null;
 
     try {
@@ -98,23 +124,32 @@ export class StockxScraper {
       await page.setUserAgent(this.getRandomUserAgent());
 
       // Set viewport
-      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setViewport({ width: 1280, height: 800 });
+
+      // Block images, media, fonts, and CSS — we only parse the DOM, so not
+      // loading them roughly halves Chrome's memory (and speeds the scrape up).
+      // Does not affect the Cloudflare bypass, which relies on JS + cookies.
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const type = req.resourceType();
+        if (type === 'image' || type === 'media' || type === 'font' || type === 'stylesheet') {
+          req.abort().catch(() => {});
+        } else {
+          req.continue().catch(() => {});
+        }
+      });
 
       // Navigate to search page
       const searchUrl = `${this.baseUrl}/search?s=${encodeURIComponent(query)}`;
       logger.debug({ url: searchUrl }, 'Navigating to StockX search');
 
       await page.goto(searchUrl, {
-        waitUntil: 'networkidle2',
+        waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
 
-      // Wait a bit for any JS to execute
+      // Wait a bit for any JS / Cloudflare challenge to execute
       await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      // Take screenshot for debugging
-      await page.screenshot({ path: '/tmp/stockx-debug.png', fullPage: true });
-      logger.debug('Screenshot saved to /tmp/stockx-debug.png');
 
       // Wait for products to load - try multiple selectors
       await page.waitForSelector('[data-testid="product-tile"], [class*="ProductCard"], [class*="product-card"], a[href*="/product/"]', { timeout: 15000 }).catch(() => {
@@ -224,6 +259,8 @@ export class StockxScraper {
       if (page) {
         await page.close().catch(() => {});
       }
+      // Close Chrome after every scrape so no idle browser stays resident in RAM.
+      await this.closeBrowser().catch(() => {});
     }
   }
 
