@@ -8,6 +8,7 @@ import { KicksDBScraper } from '../services/scrapers/kicksdb.js';
 import ebayScraper from '../services/scrapers/ebay.js';
 import imageProcessor from '../services/imageProcessor.js';
 import priceFetcher from '../services/pricing/priceFetcher.js';
+import notifier from '../services/notifier.js';
 import { SelectCandidateSchema } from '../schemas/sku.js';
 
 const goatScraper = new GoatScraper();
@@ -430,6 +431,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     if (candidates.length === 0 && dbResults.length === 0) {
+      notifier.lookupNotFound(styleCode).catch(() => {});
       res.status(404).json({ error: 'Sneaker not found on GOAT, KicksDB, StockX, or eBay' });
       return;
     }
@@ -458,6 +460,15 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         if (insertResult.rows.length > 0) {
           savedIds.set(c, insertResult.rows[0].id);
           newlyInserted.set(c, insertResult.rows[0].id);
+          const { model: m, colorway: cv } = parseName(c.name, c.brand);
+          notifier.newSneakerAdded({
+            name: `${c.brand} ${m}${cv ? ' ' + cv : ''}`,
+            styleCode: c.actualStyleCode,
+            source: c.source,
+            tier: calcTier(c.lowestPriceCents, c.retailPriceCents),
+            retailPriceCents: c.retailPriceCents,
+            lowestPriceCents: c.lowestPriceCents,
+          }).catch(() => {});
         } else {
           const requery = await dbQuery<{ id: number }>(
             `SELECT id FROM skus WHERE style_code = $1`, [c.actualStyleCode],
@@ -520,12 +531,22 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         goat_id: c.goatId ?? undefined,
         stockx_id: c.stockxId ?? undefined,
       } as SKU;
+      const { model: nm, colorway: ncv } = parseName(c.name, c.brand);
       priceFetcher
         .fetchAllPricesForSku(newSku)
-        .then((r: any) => logger.info(
-          { styleCode: c.actualStyleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
-          'Background price fetch complete for new SKU',
-        ))
+        .then((r: any) => {
+          logger.info(
+            { styleCode: c.actualStyleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
+            'Background price fetch complete for new SKU',
+          );
+          notifier.priceFetchResult({
+            name: `${c.brand} ${nm}${ncv ? ' ' + ncv : ''}`,
+            styleCode: c.actualStyleCode,
+            goat: r.goat ?? { success: false },
+            stockx: r.stockx ?? { success: false },
+            ebay: r.ebay ?? { success: false },
+          }).catch(() => {});
+        })
         .catch((err: any) => logger.warn({ err, styleCode: c.actualStyleCode }, 'Background price fetch failed for new SKU'));
     }
 

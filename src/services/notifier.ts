@@ -21,18 +21,65 @@ async function send(text: string): Promise<void> {
   }
 }
 
+const fmt = (cents: number | null) =>
+  cents && cents > 0 ? `$${(cents / 100).toFixed(0)}` : null;
+
 export const notifier = {
+  // ── Scrape events ──────────────────────────────────────────────────────
+
   scrapeError(tier: string, error: string): Promise<void> {
     return send(`❌ <b>Scrape failed</b> — ${tier}\n<code>${error}</code>`);
   },
 
   scrapeComplete(tier: string, count: number, durationMs: number): Promise<void> {
     const mins = Math.round(durationMs / 60000);
-    return send(`✅ <b>${tier} scrape complete</b>\n${count} SKUs in ${mins}m`);
+    return send(`✅ <b>${tier} scrape complete</b>\n${count} SKUs · ${mins}m`);
   },
 
   ecmvError(error: string): Promise<void> {
     return send(`❌ <b>ECMV calculation failed</b>\n<code>${error}</code>`);
+  },
+
+  // ── Lookup events ──────────────────────────────────────────────────────
+
+  newSneakerAdded(opts: {
+    name: string;
+    styleCode: string;
+    source: string;
+    tier: number;
+    retailPriceCents: number | null;
+    lowestPriceCents: number | null;
+  }): Promise<void> {
+    const retail = fmt(opts.retailPriceCents);
+    const market = fmt(opts.lowestPriceCents);
+    const priceStr = [retail ? `Retail ${retail}` : null, market ? `Market ${market}` : null]
+      .filter(Boolean).join(' · ') || 'No price yet';
+    return send(
+      `➕ <b>New sneaker added</b>\n` +
+      `${opts.name}\n` +
+      `<code>${opts.styleCode}</code> · Tier ${opts.tier} · via ${opts.source}\n` +
+      priceStr,
+    );
+  },
+
+  priceFetchResult(opts: {
+    name: string;
+    styleCode: string;
+    goat: { success: boolean; price?: number };
+    stockx: { success: boolean; price?: number };
+    ebay: { success: boolean; price?: number };
+  }): Promise<void> {
+    const line = (label: string, r: { success: boolean; price?: number }) =>
+      r.success && r.price ? `${label}: $${r.price}` : `${label}: —`;
+    return send(
+      `💰 <b>Prices fetched</b>\n` +
+      `${opts.name} · <code>${opts.styleCode}</code>\n` +
+      `${line('GOAT', opts.goat)} · ${line('StockX', opts.stockx)} · ${line('eBay', opts.ebay)}`,
+    );
+  },
+
+  lookupNotFound(styleCode: string): Promise<void> {
+    return send(`⚠️ <b>Lookup not found</b>\n<code>${styleCode}</code>\nNo results on GOAT, StockX, KicksDB, or eBay`);
   },
 };
 
