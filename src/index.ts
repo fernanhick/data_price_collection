@@ -20,6 +20,7 @@ import analyticsRoutes from './routes/analytics.js';
 import authRoutes from './routes/auth.js';
 import catalogRoutes from './routes/catalog.js';
 import jobsRoutes from './routes/jobs.js';
+import releaseRoutes from './routes/releases.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -108,6 +109,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/prices', priceBatchRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/skus/lookup', skuLookupRoute);
+app.use('/api/releases', releaseRoutes);
 
 // Protected routes (require JWT)
 app.use('/api/prices', verifyConvexJWT, priceRoutes);

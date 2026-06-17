@@ -6,6 +6,7 @@ import ecmvPersistence from './pricing/ecmvPersistence.js';
 import { query as dbQuery } from '../db/index.js';
 import { SKU } from '../types/index.js';
 import notifier from './notifier.js';
+import { refreshUpcomingReleases } from './releases/upcomingReleases.js';
 
 /**
  * Price Update Scheduler
@@ -21,10 +22,12 @@ export class PriceUpdateScheduler {
   private tier2Task: cron.ScheduledTask | null = null;
   private tier3Task: cron.ScheduledTask | null = null;
   private ecmvTask: cron.ScheduledTask | null = null;
+  private releasesTask: cron.ScheduledTask | null = null;
   private tier1Running = false;
   private tier2Running = false;
   private tier3Running = false;
   private ecmvRunning = false;
+  private releasesRunning = false;
 
   /**
    * Start all scheduler tasks
@@ -41,6 +44,7 @@ export class PriceUpdateScheduler {
     this.startTier2Schedule();
     this.startTier3Schedule();
     this.startECMVSchedule();
+    this.startReleasesSchedule();
 
     logger.info('✅ All price update schedules started');
   }
@@ -173,6 +177,32 @@ export class PriceUpdateScheduler {
   }
 
   /**
+   * Upcoming Releases: refresh the upcoming-release calendar from the source.
+   * Schedule: 6am UTC daily (after Tier 1 price fetches).
+   */
+  private startReleasesSchedule(): void {
+    logger.info(`Upcoming releases schedule: ${config.scheduler.releasesCron}`);
+
+    this.releasesTask = cron.schedule(config.scheduler.releasesCron, async () => {
+      logger.info('🆕 Starting upcoming releases refresh');
+      try {
+        const result = await refreshUpcomingReleases();
+        await notifier.upcomingReleases({
+          inserted: result.inserted,
+          updated: result.updated,
+          samples: result.newReleases.map((r) => ({ name: r.name, releaseDate: r.releaseDate })),
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, '❌ Upcoming releases refresh failed');
+        await this.logFetchFailure('releases');
+        await notifier.releasesError(msg);
+      }
+    });
+    this.releasesRunning = true;
+  }
+
+  /**
    * Log fetch failure for monitoring
    */
   private async logFetchFailure(tier: string): Promise<void> {
@@ -209,6 +239,10 @@ export class PriceUpdateScheduler {
       this.ecmvTask.stop();
       this.ecmvRunning = false;
     }
+    if (this.releasesTask) {
+      this.releasesTask.stop();
+      this.releasesRunning = false;
+    }
 
     logger.info('✅ All price update schedules stopped');
   }
@@ -222,6 +256,7 @@ export class PriceUpdateScheduler {
     tier2: { running: boolean; schedule: string };
     tier3: { running: boolean; schedule: string };
     ecmv: { running: boolean; schedule: string };
+    releases: { running: boolean; schedule: string };
   } {
     return {
       enabled: config.scheduler.enabled,
@@ -240,6 +275,10 @@ export class PriceUpdateScheduler {
       ecmv: {
         running: this.ecmvRunning,
         schedule: config.scheduler.ecmvCron,
+      },
+      releases: {
+        running: this.releasesRunning,
+        schedule: config.scheduler.releasesCron,
       },
     };
   }

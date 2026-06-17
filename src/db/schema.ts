@@ -113,4 +113,22 @@ CREATE TABLE IF NOT EXISTS app_tokens (
   value TEXT NOT NULL,
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Upcoming Sneaker Releases (sourced from external release calendars)
+CREATE TABLE IF NOT EXISTS upcoming_releases (
+  id SERIAL PRIMARY KEY,
+  style_code VARCHAR(255) UNIQUE NOT NULL,  -- SKU / style code (dedup key)
+  name VARCHAR(500) NOT NULL,
+  brand VARCHAR(100),
+  release_date DATE,
+  image_url TEXT,
+  source_url TEXT,
+  source VARCHAR(50) DEFAULT 'soleretriever',
+  first_seen_at TIMESTAMP DEFAULT NOW(),
+  last_seen_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_upcoming_releases_release_date ON upcoming_releases(release_date);
+CREATE INDEX IF NOT EXISTS idx_upcoming_releases_brand ON upcoming_releases(brand);
 `;

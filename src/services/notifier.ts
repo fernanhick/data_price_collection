@@ -81,6 +81,27 @@ export const notifier = {
   lookupNotFound(styleCode: string): Promise<void> {
     return send(`⚠️ <b>Lookup not found</b>\n<code>${styleCode}</code>\nNo results on GOAT, StockX, KicksDB, or eBay`);
   },
+
+  // ── Upcoming releases ──────────────────────────────────────────────────
+
+  upcomingReleases(opts: {
+    inserted: number;
+    updated: number;
+    samples: { name: string; releaseDate: string | null }[];
+  }): Promise<void> {
+    if (opts.inserted === 0) return Promise.resolve();
+    const lines = opts.samples
+      .slice(0, 8)
+      .map((s) => `• ${s.name}${s.releaseDate ? ` — ${s.releaseDate}` : ''}`)
+      .join('\n');
+    return send(
+      `🆕 <b>${opts.inserted} new upcoming release${opts.inserted > 1 ? 's' : ''}</b>\n${lines}`,
+    );
+  },
+
+  releasesError(error: string): Promise<void> {
+    return send(`❌ <b>Upcoming releases refresh failed</b>\n<code>${error}</code>`);
+  },
 };
 
 export default notifier;

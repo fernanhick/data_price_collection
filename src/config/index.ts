@@ -74,6 +74,7 @@ const config: AppConfig = {
     tier2Cron: process.env.TIER_2_CRON || '0 14 * * *',
     tier3Cron: process.env.TIER_3_CRON || '0 10 * * 1,4',
     ecmvCron: process.env.ECMV_CRON || '0 7,13,19,1 * * *',
+    releasesCron: process.env.RELEASES_CRON || '0 6 * * *',
   },
 
   logging: {

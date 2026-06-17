@@ -32,6 +32,9 @@
     "prices:all": "tsx src/scripts/prices.ts --all",
     "prices:fast": "tsx src/scripts/prices.ts --all --skip-stockx",
 
+    "--- RELEASES ---": "",
+    "releases:refresh": "tsx src/services/releases/upcomingReleases.ts",
+
     "--- IMAGES ---": "",
     "images": "tsx src/scripts/images.ts",
     "images:all": "tsx src/scripts/images.ts --iterations 11",
