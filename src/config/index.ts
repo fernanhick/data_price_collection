@@ -16,6 +16,16 @@ if (convexEnv !== 'development') {
   console.log(`🔐 Convex env: ${convexEnv}`);
 }
 
+// Convex releases-ingest endpoint. Push delivery (device tokens, opt-ins, Expo
+// fan-out) lives entirely in Convex now; the server just POSTs new drops here.
+// Tracks the same dev/prod deployment selection as the JWT config above.
+const releasesIngestUrl = convexEnv === 'production'
+  ? (process.env.CONVEX_RELEASES_INGEST_URL_PROD || process.env.CONVEX_RELEASES_INGEST_URL || '')
+  : (process.env.CONVEX_RELEASES_INGEST_URL_DEV  || process.env.CONVEX_RELEASES_INGEST_URL || '');
+const releasesIngestSecret = convexEnv === 'production'
+  ? (process.env.RELEASES_INGEST_SECRET_PROD || process.env.RELEASES_INGEST_SECRET || '')
+  : (process.env.RELEASES_INGEST_SECRET_DEV  || process.env.RELEASES_INGEST_SECRET || '');
+
 // Select database based on DB_TARGET: 'local' (default) or 'ec2'
 const dbTarget = process.env.DB_TARGET || 'local';
 const databaseUrl = dbTarget === 'ec2'
@@ -49,6 +59,11 @@ const config: AppConfig = {
   convex: {
     url: convexUrl,
     jwksUrl: convexJwksUrl,
+  },
+
+  releasesNotifier: {
+    ingestUrl: releasesIngestUrl,
+    ingestSecret: releasesIngestSecret,
   },
 
   scraper: {
@@ -101,5 +116,14 @@ const config: AppConfig = {
 // Validate required config
 if (!convexUrl)     console.warn(`⚠️  Convex URL not set for env: ${convexEnv}`);
 if (!convexJwksUrl) console.warn(`⚠️  Convex JWKS URL not set for env: ${convexEnv}`);
+
+// A misconfigured prod deploy must not silently stop notifying — fail loudly.
+if (convexEnv === 'production') {
+  if (!releasesIngestUrl)    throw new Error('CONVEX_RELEASES_INGEST_URL is required in production');
+  if (!releasesIngestSecret) throw new Error('RELEASES_INGEST_SECRET is required in production');
+} else {
+  if (!releasesIngestUrl)    console.warn(`⚠️  Convex releases ingest URL not set for env: ${convexEnv}`);
+  if (!releasesIngestSecret) console.warn(`⚠️  Convex releases ingest secret not set for env: ${convexEnv}`);
+}
 
 export default config;

@@ -190,6 +190,10 @@ export interface AppConfig {
     url: string;
     jwksUrl: string;
   };
+  releasesNotifier: {
+    ingestUrl: string;
+    ingestSecret: string;
+  };
   scraper: {
     timeoutMs: number;
     retryAttempts: number;

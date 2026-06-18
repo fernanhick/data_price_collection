@@ -7,6 +7,7 @@ import { query as dbQuery } from '../db/index.js';
 import { SKU } from '../types/index.js';
 import notifier from './notifier.js';
 import { refreshUpcomingReleases } from './releases/upcomingReleases.js';
+import { notifyConvexOfReleases } from './notifications/convexReleaseNotifier.js';
 
 /**
  * Price Update Scheduler (all times UTC)
@@ -197,6 +198,22 @@ export class PriceUpdateScheduler {
           updated: result.updated,
           samples: result.newReleases.map((r) => ({ name: r.name, releaseDate: r.releaseDate })),
         });
+        // Hand the same genuinely-new drops (xmax = 0) to Convex, which fans
+        // them out to devices via Expo push. Isolated in its own try/catch so a
+        // notify failure can't fail the refresh job — Telegram already fired and
+        // the price refresh must still complete. The notifier never throws, but
+        // belt-and-suspenders here regardless.
+        if (result.newReleases.length > 0) {
+          try {
+            const notified = await notifyConvexOfReleases(result.newReleases);
+            if (notified) {
+              logger.info({ accepted: notified.accepted }, '[releases] notified Convex');
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ error: msg }, '[releases] Convex notify failed');
+          }
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.error({ error: msg }, '❌ Upcoming releases refresh failed');
