@@ -34,6 +34,7 @@
 
     "--- RELEASES ---": "",
     "releases:refresh": "tsx src/services/releases/upcomingReleases.ts",
+    "releases:seed": "tsx src/scripts/seedReleases.ts",
 
     "--- IMAGES ---": "",
     "images": "tsx src/scripts/images.ts",

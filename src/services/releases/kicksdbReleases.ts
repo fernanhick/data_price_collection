@@ -20,6 +20,26 @@ const API_BASE = process.env.KICKSDB_API_BASE || 'https://api.kicks.dev';
 const PER_PAGE = 100; // KicksDB hard max
 const MAX_PAGES = 4; // safety cap; 90d is ~2 pages today, leaves headroom
 
+// Footwear-only: GOAT's feed mixes in non-shoe collectibles (category
+// 'collectibles' / product_type 'toys', e.g. trading cards). Keep only `shoes`.
+const FOOTWEAR_CATEGORY = 'shoes';
+// Out-of-scope footwear brands to drop (case-insensitive). These are real shoes
+// so the category gate keeps them — the denylist removes them by brand.
+// Env-overridable to extend without a code change.
+const BRAND_DENYLIST = new Set(
+  (process.env.RELEASES_BRAND_DENYLIST ?? 'Crocs,HOKA')
+    .split(',')
+    .map((b) => b.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** Keep only in-scope footwear: drops collectibles/toys and denylisted brands. */
+function isWantedProduct(p: any): boolean {
+  if (String(p?.category ?? '').trim().toLowerCase() !== FOOTWEAR_CATEGORY) return false;
+  if (BRAND_DENYLIST.has(String(p?.brand ?? '').trim().toLowerCase())) return false;
+  return true;
+}
+
 /** GOAT's date range filter only works as a string comparison on the ISO field. */
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -94,6 +114,7 @@ export async function fetchUpcomingReleasesFromKicksDB(horizonDays = 90): Promis
     const products = await fetchPage(filters, page);
     if (products.length === 0) break; // past the last page
     for (const p of products) {
+      if (!isWantedProduct(p)) continue; // footwear-only, minus denylisted brands
       const r = toRawRelease(p);
       if (!r) continue;
       // Exact horizon guard: drop the past/far-future rows the string filter leaks,

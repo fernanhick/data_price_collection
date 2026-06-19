@@ -75,8 +75,12 @@ async function postBatch(
   secret: string,
   releases: WireRelease[],
   label = '',
+  suppressPush = false,
 ): Promise<IngestResponse | null> {
-  const body = JSON.stringify({ releases });
+  // `suppressPush` tells Convex to upsert the rows WITHOUT firing pushes — used
+  // for the one-time bulk seed so backfilling the calendar doesn't notify every
+  // user. Omitted from the body entirely on normal runs.
+  const body = JSON.stringify(suppressPush ? { releases, suppressPush: true } : { releases });
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController();
@@ -135,11 +139,14 @@ async function postBatch(
  */
 export async function notifyConvexOfReleases(
   releases: RawRelease[],
+  opts: { suppressPush?: boolean } = {},
 ): Promise<{ accepted: number } | null> {
   if (releases.length === 0) return { accepted: 0 };
 
   const wire = releases.map(toWire).filter((w): w is WireRelease => w !== null);
   if (wire.length === 0) return { accepted: 0 };
+
+  const suppressPush = opts.suppressPush === true;
 
   const { targets } = config.releasesNotifier;
   if (targets.length === 0) {
@@ -154,7 +161,7 @@ export async function notifyConvexOfReleases(
     let accepted = 0;
     let failed = false;
     for (const batch of chunk(wire, BATCH_SIZE)) {
-      const res = await postBatch(target.url, target.secret, batch, target.label);
+      const res = await postBatch(target.url, target.secret, batch, target.label, suppressPush);
       if (res === null) {
         failed = true; // failure already logged in postBatch
         break;
@@ -169,7 +176,7 @@ export async function notifyConvexOfReleases(
 
     anySucceeded = true;
     totalAccepted += accepted;
-    logger.info({ target: target.label, accepted }, 'Convex releases notified target');
+    logger.info({ target: target.label, accepted, suppressPush }, 'Convex releases notified target');
   }
 
   return anySucceeded ? { accepted: totalAccepted } : null;
