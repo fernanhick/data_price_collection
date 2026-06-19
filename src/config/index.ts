@@ -107,7 +107,13 @@ const config: AppConfig = {
     tier2Cron: process.env.TIER_2_CRON || '0 5 * * *',
     tier3Cron: process.env.TIER_3_CRON || '0 7 * * 1,4',
     ecmvCron: process.env.ECMV_CRON || '0 0,6,12,18 * * *',
-    releasesCron: process.env.RELEASES_CRON || '0 4 * * *',
+    // Every 3rd day at 04:00 UTC. The 90-day KicksDB calendar changes slowly and
+    // each sync spends ~2 of our 1000 monthly KicksDB requests, so a low cadence
+    // keeps quota for the manual catalog import (~20 req/month here).
+    releasesCron: process.env.RELEASES_CRON || '0 4 */3 * *',
+    // Above this many genuinely-new drops in one sync, suppress push notifications
+    // (treat as a backfill/seed, not real announcements). See scheduler.
+    releasesNotifyMax: parseInt(process.env.RELEASES_NOTIFY_MAX || '25', 10),
   },
 
   logging: {

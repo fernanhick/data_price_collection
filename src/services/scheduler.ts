@@ -184,7 +184,7 @@ export class PriceUpdateScheduler {
 
   /**
    * Upcoming Releases: refresh the upcoming-release calendar from the source.
-   * Schedule: 04:00 UTC daily (light HTTP fetch, no Chrome).
+   * Schedule: 04:00 UTC every 3rd day (light KicksDB API fetch, no Chrome).
    */
   private startReleasesSchedule(): void {
     logger.info(`Upcoming releases schedule: ${config.scheduler.releasesCron}`);
@@ -203,7 +203,14 @@ export class PriceUpdateScheduler {
         // notify failure can't fail the refresh job — Telegram already fired and
         // the price refresh must still complete. The notifier never throws, but
         // belt-and-suspenders here regardless.
-        if (result.newReleases.length > 0) {
+        //
+        // Flood guard: a normal 3-day sync surfaces a handful of new drops. A
+        // run that reports dozens is a backfill — the first seed after switching
+        // sources, or the table having been cleared — NOT dozens of real new
+        // announcements. Seed the calendar silently rather than firing a push
+        // storm at every user; subsequent runs notify normally.
+        const newCount = result.newReleases.length;
+        if (newCount > 0 && newCount <= config.scheduler.releasesNotifyMax) {
           try {
             const notified = await notifyConvexOfReleases(result.newReleases);
             if (notified) {
@@ -213,6 +220,11 @@ export class PriceUpdateScheduler {
             const msg = error instanceof Error ? error.message : String(error);
             logger.error({ error: msg }, '[releases] Convex notify failed');
           }
+        } else if (newCount > config.scheduler.releasesNotifyMax) {
+          logger.warn(
+            { newCount, max: config.scheduler.releasesNotifyMax },
+            '[releases] large new-drop batch — treating as backfill, suppressing push notifications',
+          );
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

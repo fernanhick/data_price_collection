@@ -1,12 +1,14 @@
 import dotenv from 'dotenv';
-import { fetchUrl } from '../../utils/http.js';
 import { query as dbQuery, closePool } from '../../db/index.js';
 import logger from '../../utils/logger.js';
-import { parseReleases, RawRelease } from './soleRetrieverParser.js';
+import type { RawRelease } from './soleRetrieverParser.js';
+import { fetchUpcomingReleasesFromKicksDB } from './kicksdbReleases.js';
 
-const SOURCE = 'soleretriever';
-const RELEASES_URL =
-  process.env.RELEASES_SOURCE_URL || 'https://www.soleretriever.com/sneaker-release-dates';
+const SOURCE = 'kicksdb-goat';
+// How far ahead to pull the calendar. KicksDB GOAT exposes a real release_date,
+// so we can show users a full quarter of upcoming drops (vs SoleRetriever's ~1
+// week). Bounded server-side so a sync stays at ~2 requests.
+const HORIZON_DAYS = parseInt(process.env.RELEASES_HORIZON_DAYS || '90', 10);
 
 export interface UpcomingRelease {
   style_code: string;
@@ -30,13 +32,12 @@ export interface RefreshResult {
  * inserted (i.e. genuinely new drops) so callers can notify on them.
  */
 export async function refreshUpcomingReleases(): Promise<RefreshResult> {
-  const html = await fetchUrl(RELEASES_URL, { retries: 3 });
-  const releases = parseReleases(html);
+  const releases = await fetchUpcomingReleasesFromKicksDB(HORIZON_DAYS);
 
-  // An empty parse almost always means a block or a layout change, not "no
+  // An empty result almost always means an API/quota problem, not "no
   // releases" — fail loudly rather than silently wiping our freshness signal.
   if (releases.length === 0) {
-    throw new Error('No releases parsed from source (possible block or layout change)');
+    throw new Error('No upcoming releases returned from source (possible API/quota issue)');
   }
 
   let inserted = 0;
