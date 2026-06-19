@@ -24,6 +24,8 @@ export interface RefreshResult {
   inserted: number;
   updated: number;
   newReleases: RawRelease[];
+  /** The full current calendar this run — emitted to Convex (the system of record). */
+  allReleases: RawRelease[];
 }
 
 /**
@@ -70,7 +72,7 @@ export async function refreshUpcomingReleases(): Promise<RefreshResult> {
   }
 
   logger.info({ fetched: releases.length, inserted, updated }, '✅ Upcoming releases refreshed');
-  return { fetched: releases.length, inserted, updated, newReleases };
+  return { fetched: releases.length, inserted, updated, newReleases, allReleases: releases };
 }
 
 /** Read stored upcoming releases (defaults to today onward, soonest first). */

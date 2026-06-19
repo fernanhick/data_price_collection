@@ -198,33 +198,26 @@ export class PriceUpdateScheduler {
           updated: result.updated,
           samples: result.newReleases.map((r) => ({ name: r.name, releaseDate: r.releaseDate })),
         });
-        // Hand the same genuinely-new drops (xmax = 0) to Convex, which fans
-        // them out to devices via Expo push. Isolated in its own try/catch so a
-        // notify failure can't fail the refresh job — Telegram already fired and
-        // the price refresh must still complete. The notifier never throws, but
-        // belt-and-suspenders here regardless.
-        //
-        // Flood guard: a normal 3-day sync surfaces a handful of new drops. A
-        // run that reports dozens is a backfill — the first seed after switching
-        // sources, or the table having been cleared — NOT dozens of real new
-        // announcements. Seed the calendar silently rather than firing a push
-        // storm at every user; subsequent runs notify normally.
-        const newCount = result.newReleases.length;
-        if (newCount > 0 && newCount <= config.scheduler.releasesNotifyMax) {
+        // Emit the FULL current calendar to Convex (the system of record). Per
+        // the ingest contract, Convex owns idempotency, ordering, and push
+        // fan-out: re-POSTing an existing id just upserts (no re-notify), only a
+        // new id triggers the "new release" push, and a changed releaseDate
+        // updates ordering/countdown. So we don't filter to new-only or manage
+        // notifications here — we just hand over correct data every run.
+        // Isolated try/catch so a notify failure can't fail the refresh job.
+        if (result.allReleases.length > 0) {
           try {
-            const notified = await notifyConvexOfReleases(result.newReleases);
+            const notified = await notifyConvexOfReleases(result.allReleases);
             if (notified) {
-              logger.info({ accepted: notified.accepted }, '[releases] notified Convex');
+              logger.info(
+                { accepted: notified.accepted, emitted: result.allReleases.length },
+                '[releases] emitted calendar to Convex',
+              );
             }
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            logger.error({ error: msg }, '[releases] Convex notify failed');
+            logger.error({ error: msg }, '[releases] Convex emit failed');
           }
-        } else if (newCount > config.scheduler.releasesNotifyMax) {
-          logger.warn(
-            { newCount, max: config.scheduler.releasesNotifyMax },
-            '[releases] large new-drop batch — treating as backfill, suppressing push notifications',
-          );
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

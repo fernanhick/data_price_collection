@@ -1,6 +1,7 @@
 import config from '../../config/index.js';
 import logger from '../../utils/logger.js';
 import type { RawRelease } from '../releases/soleRetrieverParser.js';
+import { mapPushBrand } from './brandMap.js';
 
 /**
  * Convex release notifier.
@@ -53,8 +54,13 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function toWire(r: RawRelease): WireRelease | null {
   if (!r.styleCode) return null;
   const wire: WireRelease = { id: r.styleCode, styleCode: r.styleCode };
-  if (r.brand) wire.brand = r.brand;
+  // Brand must be the canonical push-target value for brand-targeted pushes to
+  // fire; unmapped brands pass through as-is (catalog-only). See brandMap.ts.
+  const brand = mapPushBrand(r.brand);
+  if (brand) wire.brand = brand;
   if (r.name) wire.name = r.name;
+  // releaseDate is already ISO YYYY-MM-DD (Date.parse-able) or omitted; never a
+  // vague string — the source layer guarantees this.
   if (r.releaseDate) wire.releaseDate = r.releaseDate;
   if (r.imageUrl) wire.imageUrl = r.imageUrl;
   return wire;

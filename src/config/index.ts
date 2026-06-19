@@ -111,9 +111,6 @@ const config: AppConfig = {
     // each sync spends ~2 of our 1000 monthly KicksDB requests, so a low cadence
     // keeps quota for the manual catalog import (~20 req/month here).
     releasesCron: process.env.RELEASES_CRON || '0 4 */3 * *',
-    // Above this many genuinely-new drops in one sync, suppress push notifications
-    // (treat as a backfill/seed, not real announcements). See scheduler.
-    releasesNotifyMax: parseInt(process.env.RELEASES_NOTIFY_MAX || '25', 10),
   },
 
   logging: {
