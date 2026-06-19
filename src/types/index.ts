@@ -168,6 +168,13 @@ export interface StockXListing {
   timestamp: Date;
 }
 
+// A single Convex releases-ingest endpoint to fan new drops out to.
+export interface ReleasesIngestTarget {
+  label: string; // 'prod' | 'dev' | env name — for logging only
+  url: string;
+  secret: string;
+}
+
 // Configuration
 export interface AppConfig {
   nodeEnv: 'development' | 'production' | 'test';
@@ -191,8 +198,10 @@ export interface AppConfig {
     jwksUrl: string;
   };
   releasesNotifier: {
-    ingestUrl: string;
-    ingestSecret: string;
+    // Every fully-configured Convex deployment to notify. Usually just prod,
+    // but dev can be added alongside so test pushes flow without taking prod
+    // offline. Empty array = notifying is disabled.
+    targets: ReleasesIngestTarget[];
   };
   scraper: {
     timeoutMs: number;

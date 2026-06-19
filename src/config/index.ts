@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { AppConfig } from '../types/index.js';
+import { AppConfig, ReleasesIngestTarget } from '../types/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -16,15 +16,32 @@ if (convexEnv !== 'development') {
   console.log(`🔐 Convex env: ${convexEnv}`);
 }
 
-// Convex releases-ingest endpoint. Push delivery (device tokens, opt-ins, Expo
+// Convex releases-ingest endpoints. Push delivery (device tokens, opt-ins, Expo
 // fan-out) lives entirely in Convex now; the server just POSTs new drops here.
-// Tracks the same dev/prod deployment selection as the JWT config above.
-const releasesIngestUrl = convexEnv === 'production'
-  ? (process.env.CONVEX_RELEASES_INGEST_URL_PROD || process.env.CONVEX_RELEASES_INGEST_URL || '')
-  : (process.env.CONVEX_RELEASES_INGEST_URL_DEV  || process.env.CONVEX_RELEASES_INGEST_URL || '');
-const releasesIngestSecret = convexEnv === 'production'
-  ? (process.env.RELEASES_INGEST_SECRET_PROD || process.env.RELEASES_INGEST_SECRET || '')
-  : (process.env.RELEASES_INGEST_SECRET_DEV  || process.env.RELEASES_INGEST_SECRET || '');
+//
+// We notify EVERY fully-configured deployment, not just the CONVEX_ENV-selected
+// one. That lets dev run alongside prod: set both the *_DEV and *_PROD pairs and
+// new drops fan out to both, so you can test pushes in a dev build without
+// taking the live prod notifier offline. A pair counts only if its URL *and*
+// secret are present; unset pairs are skipped. The bare CONVEX_RELEASES_INGEST_URL
+// pair is kept as a single-deployment fallback and labelled with the active env.
+function buildIngestTargets(): ReleasesIngestTarget[] {
+  const candidates: ReleasesIngestTarget[] = [
+    { label: 'prod', url: process.env.CONVEX_RELEASES_INGEST_URL_PROD || '', secret: process.env.RELEASES_INGEST_SECRET_PROD || '' },
+    { label: 'dev',  url: process.env.CONVEX_RELEASES_INGEST_URL_DEV  || '', secret: process.env.RELEASES_INGEST_SECRET_DEV  || '' },
+    { label: convexEnv, url: process.env.CONVEX_RELEASES_INGEST_URL || '', secret: process.env.RELEASES_INGEST_SECRET || '' },
+  ];
+  const seen = new Set<string>();
+  const targets: ReleasesIngestTarget[] = [];
+  for (const t of candidates) {
+    if (!t.url || !t.secret) continue;   // only fully-configured pairs
+    if (seen.has(t.url)) continue;       // dedup if the same URL is set twice
+    seen.add(t.url);
+    targets.push(t);
+  }
+  return targets;
+}
+const releasesIngestTargets = buildIngestTargets();
 
 // Select database based on DB_TARGET: 'local' (default) or 'ec2'
 const dbTarget = process.env.DB_TARGET || 'local';
@@ -62,8 +79,7 @@ const config: AppConfig = {
   },
 
   releasesNotifier: {
-    ingestUrl: releasesIngestUrl,
-    ingestSecret: releasesIngestSecret,
+    targets: releasesIngestTargets,
   },
 
   scraper: {
@@ -119,11 +135,14 @@ if (!convexJwksUrl) console.warn(`⚠️  Convex JWKS URL not set for env: ${con
 
 // A misconfigured prod deploy must not silently stop notifying — fail loudly.
 if (convexEnv === 'production') {
-  if (!releasesIngestUrl)    throw new Error('CONVEX_RELEASES_INGEST_URL is required in production');
-  if (!releasesIngestSecret) throw new Error('RELEASES_INGEST_SECRET is required in production');
-} else {
-  if (!releasesIngestUrl)    console.warn(`⚠️  Convex releases ingest URL not set for env: ${convexEnv}`);
-  if (!releasesIngestSecret) console.warn(`⚠️  Convex releases ingest secret not set for env: ${convexEnv}`);
+  if (releasesIngestTargets.length === 0) {
+    throw new Error('No Convex releases ingest target configured (set CONVEX_RELEASES_INGEST_URL[_PROD] and its secret) — required in production');
+  }
+} else if (releasesIngestTargets.length === 0) {
+  console.warn(`⚠️  No Convex releases ingest target configured for env: ${convexEnv}`);
+}
+if (releasesIngestTargets.length > 0) {
+  console.log(`📣 Convex releases ingest targets: ${releasesIngestTargets.map((t) => t.label).join(', ')}`);
 }
 
 export default config;

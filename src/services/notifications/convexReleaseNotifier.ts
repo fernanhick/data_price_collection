@@ -68,6 +68,7 @@ async function postBatch(
   url: string,
   secret: string,
   releases: WireRelease[],
+  label = '',
 ): Promise<IngestResponse | null> {
   const body = JSON.stringify({ releases });
 
@@ -94,17 +95,17 @@ async function postBatch(
       // Retrying won't help — surface it loudly and stop.
       if (res.status >= 400 && res.status < 500) {
         logger.error(
-          { status: res.status },
+          { status: res.status, target: label },
           'Convex releases ingest rejected request (config/contract problem)',
         );
         return null;
       }
 
       // 5xx — transient, fall through to retry.
-      logger.warn({ status: res.status, attempt }, 'Convex releases ingest server error');
+      logger.warn({ status: res.status, attempt, target: label }, 'Convex releases ingest server error');
     } catch (err) {
       // Network error or AbortController timeout — transient, retry.
-      logger.warn({ err, attempt }, 'Convex releases ingest request failed');
+      logger.warn({ err, attempt, target: label }, 'Convex releases ingest request failed');
     } finally {
       clearTimeout(timer);
     }
@@ -112,14 +113,19 @@ async function postBatch(
     if (attempt < MAX_ATTEMPTS) await sleep(500 * attempt);
   }
 
-  logger.error({ count: releases.length }, 'Convex releases ingest failed after retries');
+  logger.error({ count: releases.length, target: label }, 'Convex releases ingest failed after retries');
   return null;
 }
 
 /**
- * Notify Convex of newly-detected releases. Returns the total accepted count
- * for logging, or null if the notify could not be confirmed. The return value
- * is informational only — nothing should depend on it.
+ * Notify every configured Convex deployment of newly-detected releases. When
+ * both dev and prod targets are set, both are notified so a dev build can be
+ * tested without taking the live prod notifier offline.
+ *
+ * Targets are independent: a failure against one (e.g. a flaky dev deployment)
+ * is logged and skipped, never aborting the others. Returns the total accepted
+ * count across targets that succeeded, or null if no target could be confirmed.
+ * The return value is informational only — nothing should depend on it.
  */
 export async function notifyConvexOfReleases(
   releases: RawRelease[],
@@ -129,18 +135,36 @@ export async function notifyConvexOfReleases(
   const wire = releases.map(toWire).filter((w): w is WireRelease => w !== null);
   if (wire.length === 0) return { accepted: 0 };
 
-  const { ingestUrl, ingestSecret } = config.releasesNotifier;
-  if (!ingestUrl || !ingestSecret) {
+  const { targets } = config.releasesNotifier;
+  if (targets.length === 0) {
     logger.warn('Convex releases ingest not configured; skipping notify');
     return null;
   }
 
-  let accepted = 0;
-  for (const batch of chunk(wire, BATCH_SIZE)) {
-    const res = await postBatch(ingestUrl, ingestSecret, batch);
-    if (res === null) return null; // failure already logged
-    accepted += res.accepted;
+  let anySucceeded = false;
+  let totalAccepted = 0;
+
+  for (const target of targets) {
+    let accepted = 0;
+    let failed = false;
+    for (const batch of chunk(wire, BATCH_SIZE)) {
+      const res = await postBatch(target.url, target.secret, batch, target.label);
+      if (res === null) {
+        failed = true; // failure already logged in postBatch
+        break;
+      }
+      accepted += res.accepted;
+    }
+
+    if (failed) {
+      logger.error({ target: target.label }, 'Convex releases notify failed for target; continuing');
+      continue;
+    }
+
+    anySucceeded = true;
+    totalAccepted += accepted;
+    logger.info({ target: target.label, accepted }, 'Convex releases notified target');
   }
 
-  return { accepted };
+  return anySucceeded ? { accepted: totalAccepted } : null;
 }
