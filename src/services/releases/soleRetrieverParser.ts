@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { cleanImageUrl } from '../../utils/imageUrl.js';
 
 /**
  * SoleRetriever release-calendar parser.
@@ -86,7 +87,7 @@ export function parseReleases(html: string): RawRelease[] {
           name: String(p.name || '').trim(),
           brand: extractBrand(p.brand),
           releaseDate,
-          imageUrl: extractImage(p.image),
+          imageUrl: cleanImageUrl(extractImage(p.image)) || null,
           sourceUrl,
         });
       }

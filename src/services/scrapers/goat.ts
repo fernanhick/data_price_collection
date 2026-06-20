@@ -3,6 +3,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
 import { GOATListing } from '../../types/index.js';
+import { cleanImageUrl } from '../../utils/imageUrl.js';
 
 /**
  * GOAT Price Scraper
@@ -72,7 +73,7 @@ export class GoatScraper {
           instantShipPriceCents: hit.instant_ship_lowest_price_cents || null,
           brand: hit.brand_name || '',
           colorway: hit.details || '',
-          imageUrl: hit.grid_picture_url || '',
+          imageUrl: cleanImageUrl(hit.grid_picture_url),
           url: `https://www.goat.com/sneakers/${hit.slug}`,
           timestamp: new Date(),
         });
@@ -125,7 +126,7 @@ export class GoatScraper {
         instantShipPriceCents: hit.instant_ship_lowest_price_cents || null,
         brand: hit.brand_name || '',
         colorway: hit.details || '',
-        imageUrl: hit.grid_picture_url || '',
+        imageUrl: cleanImageUrl(hit.grid_picture_url),
         url: `https://www.goat.com/sneakers/${hit.slug}`,
         timestamp: new Date(),
       }));

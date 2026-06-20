@@ -1,4 +1,5 @@
 import logger from '../../utils/logger.js';
+import { cleanImageUrl } from '../../utils/imageUrl.js';
 import type { RawRelease } from './soleRetrieverParser.js';
 
 /**
@@ -66,7 +67,9 @@ function toRawRelease(p: any): RawRelease | null {
     name: String(p.name || '').trim(),
     brand: p.brand ? String(p.brand) : null,
     releaseDate,
-    imageUrl: p.image_url ? String(p.image_url) : null,
+    // GOAT serves a "missing.png" placeholder for unreleased shoes with no photo
+    // yet; drop it so the app shows its own clean placeholder, not a white box.
+    imageUrl: cleanImageUrl(p.image_url) || null,
     // Clean canonical GOAT URL from the slug — the API's `link` is an affiliate redirect.
     sourceUrl: slug ? `https://www.goat.com/sneakers/${slug}` : null,
   };

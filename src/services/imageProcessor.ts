@@ -5,6 +5,30 @@ import path from 'path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
+import { isPlaceholderImageUrl } from '../utils/imageUrl.js';
+
+/**
+ * Per-channel std-dev below which an image is considered blank/uniform (a
+ * "no photo" placeholder). Real product photos sit well above 40; GOAT's
+ * placeholder asset measures 0. A small threshold leaves wide margin.
+ */
+const BLANK_IMAGE_STDDEV_THRESHOLD = 4;
+
+/**
+ * Returns true when an image buffer is a near-uniform (blank/white/grey)
+ * graphic with no real product content.
+ */
+export async function isBlankImage(buffer: Buffer): Promise<boolean> {
+  try {
+    const { channels } = await sharp(buffer).stats();
+    const rgb = channels.slice(0, 3);
+    if (rgb.length === 0) return false;
+    return rgb.every((c) => c.stdev < BLANK_IMAGE_STDDEV_THRESHOLD);
+  } catch {
+    // If stats can't be computed, let downstream processing decide.
+    return false;
+  }
+}
 
 export interface ImageProcessingResult {
   fullPath: string;
@@ -79,6 +103,12 @@ export class ImageProcessor {
     styleCode: string
   ): Promise<ImageProcessingResult | null> {
     try {
+      // Skip known placeholder / "no photo" source URLs before downloading.
+      if (isPlaceholderImageUrl(imageUrl)) {
+        logger.info({ imageUrl, styleCode }, 'Skipping placeholder image URL');
+        return null;
+      }
+
       // Sanitize filename
       const safeFilename = this.sanitizeFilename(styleCode);
 
@@ -93,6 +123,14 @@ export class ImageProcessor {
       });
 
       const buffer = Buffer.from(response.data);
+
+      // Reject blank/uniform graphics: sources serve a valid but all-white/grey
+      // "no photo" image that would otherwise be baked into storage and render
+      // as a blank box in the app.
+      if (await isBlankImage(buffer)) {
+        logger.info({ imageUrl, styleCode }, 'Skipping blank/placeholder image (uniform pixels)');
+        return null;
+      }
 
       // Process full-size image (600x600, WebP, 80% quality)
       const fullImage = await sharp(buffer)
