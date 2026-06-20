@@ -10,6 +10,7 @@ import imageProcessor from '../services/imageProcessor.js';
 import priceFetcher from '../services/pricing/priceFetcher.js';
 import notifier from '../services/notifier.js';
 import { SelectCandidateSchema } from '../schemas/sku.js';
+import { cleanImageUrl } from '../utils/imageUrl.js';
 
 const goatScraper = new GoatScraper();
 const stockxScraper = new StockxScraper();
@@ -54,7 +55,7 @@ const formatDbRow = (sku: SKU) => ({
   image_thumbnail_url: (sku as any).image_local_path
     ? (sku as any).image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
     : null,
-  source_image_url: sku.image_url || null,
+  source_image_url: cleanImageUrl(sku.image_url) || null,
   display_name: `${sku.brand} ${sku.model}${sku.colorway ? ' - ' + sku.colorway : ''}`,
 });
 
@@ -193,7 +194,9 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         colorway: sku.colorway,
         retail_price: sku.retail_price,
         tier: sku.tier,
-        image_url: sku.image_local_path || sku.image_url,
+        // Prefer the optimized S3 image; fall back to the source URL only if it's
+        // a real photo (never a placeholder, which renders as a white box).
+        image_url: sku.image_local_path || cleanImageUrl(sku.image_url) || null,
         image_thumbnail_url: sku.image_local_path
           ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
           : null,
@@ -280,7 +283,9 @@ router.get('/catalog', async (req: Request, res: Response): Promise<void> => {
         style_code: sku.style_code,
         retail_price: sku.retail_price,
         tier: sku.tier,
-        image_url: sku.image_local_path || sku.image_url,
+        // Prefer the optimized S3 image; fall back to the source URL only if it's
+        // a real photo (never a placeholder, which renders as a white box).
+        image_url: sku.image_local_path || cleanImageUrl(sku.image_url) || null,
         image_thumbnail_url: sku.image_local_path
           ? sku.image_local_path.replace('/sneakers/', '/sneakers/thumbs/')
           : null,
@@ -572,7 +577,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         tier,
         image_url: s3Url,
         image_thumbnail_url: s3Url ? s3Url.replace('/sneakers/', '/sneakers/thumbs/') : null,
-        source_image_url: c.imageUrl || null,
+        source_image_url: cleanImageUrl(c.imageUrl) || null,
         goat_id: c.goatId,
         stockx_id: c.stockxId,
         display_name: `${c.brand} ${model}${colorway ? ' - ' + colorway : ''}`,

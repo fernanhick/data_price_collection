@@ -14,8 +14,42 @@
 
 import { query, closePool } from '../db/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
+import { KicksDBScraper } from '../services/scrapers/kicksdb.js';
 import imageProcessor from '../services/imageProcessor.js';
+import { cleanImageUrl } from '../utils/imageUrl.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Resolve a real (non-placeholder) product image URL for a style code, trying
+ * GOAT first, then falling back to KicksDB's StockX feed — a different source,
+ * so it often has a photo when GOAT only serves its "missing" placeholder.
+ * Returns '' when no real image is found anywhere.
+ */
+async function resolveImageUrl(
+  styleCode: string,
+  goat: GoatScraper,
+  kicksdb: KicksDBScraper,
+): Promise<string> {
+  try {
+    const listing = await goat.getPriceForSku(styleCode);
+    const url = cleanImageUrl(listing?.imageUrl);
+    if (url) return url;
+  } catch (error) {
+    logger.debug({ styleCode, error }, 'GOAT image lookup failed');
+  }
+
+  try {
+    const results = await kicksdb.searchByStyleCode(styleCode, 5);
+    for (const r of results) {
+      const url = cleanImageUrl(r.imageUrl);
+      if (url) return url;
+    }
+  } catch (error) {
+    logger.debug({ styleCode, error }, 'KicksDB image fallback failed');
+  }
+
+  return '';
+}
 
 interface SKURow {
   id: number;
@@ -75,6 +109,7 @@ export async function backfillImages(options: { iterations?: number } = {}): Pro
     console.log(`Processing ${skus.length} SKUs...`);
 
     const goatScraper = new GoatScraper();
+    const kicksdbScraper = new KicksDBScraper();
     let iterSuccess = 0;
     let iterFailed = 0;
 
@@ -84,12 +119,11 @@ export async function backfillImages(options: { iterations?: number } = {}): Pro
           console.log(`Processing: ${sku.brand} ${sku.model} (${sku.style_code})`);
         }
 
-        let imageUrl = sku.image_url;
+        let imageUrl = cleanImageUrl(sku.image_url);
 
         if (!imageUrl) {
-          const listing = await goatScraper.getPriceForSku(sku.style_code);
-          if (listing && listing.imageUrl) {
-            imageUrl = listing.imageUrl;
+          imageUrl = await resolveImageUrl(sku.style_code, goatScraper, kicksdbScraper);
+          if (imageUrl) {
             await query(`UPDATE skus SET image_url = $1 WHERE id = $2`, [imageUrl, sku.id]);
           }
         }

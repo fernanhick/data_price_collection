@@ -6,6 +6,7 @@ import { GoatScraper } from '../services/scrapers/goat.js';
 import { StockxScraper } from '../services/scrapers/stockx.js';
 import { PriceFetcher } from '../services/pricing/priceFetcher.js';
 import imageProcessor from '../services/imageProcessor.js';
+import { cleanImageUrl } from '../utils/imageUrl.js';
 import { SKU } from '../types/index.js';
 
 const router = Router();
@@ -53,7 +54,7 @@ async function lookupGoat(styleCode: string): Promise<MarketplaceResult | null> 
     colorway: listing.colorway,
     productName: listing.name,
     retailPrice: listing.retailPriceCents ? Math.round(listing.retailPriceCents / 100) : null,
-    imageUrl: listing.imageUrl || null,
+    imageUrl: cleanImageUrl(listing.imageUrl) || null,
   };
 }
 
@@ -69,7 +70,7 @@ async function lookupStockX(styleCode: string): Promise<MarketplaceResult | null
     colorway: listing.colorway,
     productName: listing.name,
     retailPrice: listing.retailPrice,
-    imageUrl: listing.imageUrl || null,
+    imageUrl: cleanImageUrl(listing.imageUrl) || null,
   };
 }
 
