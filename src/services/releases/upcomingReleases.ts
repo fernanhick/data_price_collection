@@ -6,9 +6,10 @@ import { fetchUpcomingReleasesFromKicksDB } from './kicksdbReleases.js';
 
 const SOURCE = 'kicksdb-goat';
 // How far ahead to pull the calendar. KicksDB GOAT exposes a real release_date,
-// so we can show users a full quarter of upcoming drops (vs SoleRetriever's ~1
-// week). Bounded server-side so a sync stays at ~2 requests.
-const HORIZON_DAYS = parseInt(process.env.RELEASES_HORIZON_DAYS || '90', 10);
+// so we can show users a full year of upcoming drops (vs SoleRetriever's ~1
+// week). GOAT's forward visibility flattens out ~6 months ahead, so 365d costs
+// the same as 90d — still ~2 pages/run — while capturing the sparse far tail.
+const HORIZON_DAYS = parseInt(process.env.RELEASES_HORIZON_DAYS || '365', 10);
 
 export interface UpcomingRelease {
   style_code: string;

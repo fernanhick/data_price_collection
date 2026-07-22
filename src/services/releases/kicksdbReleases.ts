@@ -12,14 +12,15 @@ import type { RawRelease } from './soleRetrieverParser.js';
  *
  * Quota-conscious by design: KicksDB's free tier is 1000 requests/month, shared
  * with the manual catalog import. A server-side date range (`> today AND
- * < today+horizon`) narrows the result so the whole 90-day window fits in two
- * paged requests (limit 100), so one sync costs exactly `pages` requests.
+ * < today+horizon`) narrows the result so even the full 365-day window fits in
+ * two paged requests (limit 100) — GOAT's forward calendar flattens ~6mo out —
+ * so one sync costs exactly `pages` requests.
  */
 
 const API_KEY = process.env.KICKSDB_API_KEY;
 const API_BASE = process.env.KICKSDB_API_BASE || 'https://api.kicks.dev';
 const PER_PAGE = 100; // KicksDB hard max
-const MAX_PAGES = 4; // safety cap; 90d is ~2 pages today, leaves headroom
+const MAX_PAGES = 4; // safety cap; even 365d is ~2 pages today, leaves headroom
 
 // Footwear-only: GOAT's feed mixes in non-shoe collectibles (category
 // 'collectibles' / product_type 'toys', e.g. trading cards). Keep only `shoes`.
@@ -99,7 +100,7 @@ async function fetchPage(filters: string, page: number): Promise<any[]> {
  * deduped `RawRelease[]` sorted by release date ascending. Throws on a missing
  * key or transport error — the caller treats that like a failed scrape.
  */
-export async function fetchUpcomingReleasesFromKicksDB(horizonDays = 90): Promise<RawRelease[]> {
+export async function fetchUpcomingReleasesFromKicksDB(horizonDays = 365): Promise<RawRelease[]> {
   if (!API_KEY) throw new Error('KICKSDB_API_KEY not configured');
 
   const now = new Date();
