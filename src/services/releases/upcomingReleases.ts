@@ -47,7 +47,11 @@ export async function refreshUpcomingReleases(): Promise<RefreshResult> {
   const newReleases: RawRelease[] = [];
 
   for (const r of releases) {
-    const res = await dbQuery<{ inserted: boolean }>(
+    // COALESCE(EXCLUDED.x, existing.x): the GOAT feed frequently serves a null
+    // image (and occasionally a null source) for shoes it hasn't photographed
+    // yet — often ones we already have a good image for. Overwriting with the
+    // fresh null wiped those, so we keep the stored value when the feed has none.
+    const res = await dbQuery<{ inserted: boolean; image_url: string | null; source_url: string | null }>(
       `INSERT INTO upcoming_releases
          (style_code, name, brand, release_date, image_url, source_url, source, last_seen_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
@@ -55,15 +59,24 @@ export async function refreshUpcomingReleases(): Promise<RefreshResult> {
          name = EXCLUDED.name,
          brand = EXCLUDED.brand,
          release_date = EXCLUDED.release_date,
-         image_url = EXCLUDED.image_url,
-         source_url = EXCLUDED.source_url,
+         image_url = COALESCE(EXCLUDED.image_url, upcoming_releases.image_url),
+         source_url = COALESCE(EXCLUDED.source_url, upcoming_releases.source_url),
          last_seen_at = NOW(),
          updated_at = NOW()
-       RETURNING (xmax = 0) AS inserted`,
+       RETURNING (xmax = 0) AS inserted, image_url, source_url`,
       [r.styleCode, r.name, r.brand, r.releaseDate, r.imageUrl, r.sourceUrl, SOURCE],
     );
 
-    if ((res.rows[0] as any)?.inserted) {
+    const row = res.rows[0] as any;
+    // Carry the *persisted* (post-COALESCE) image/source back onto the record so
+    // the Convex emit below ships the preserved value, not the feed's null —
+    // otherwise the DB would keep the image but the app would still lose it.
+    if (row) {
+      r.imageUrl = row.image_url ?? r.imageUrl;
+      r.sourceUrl = row.source_url ?? r.sourceUrl;
+    }
+
+    if (row?.inserted) {
       inserted++;
       newReleases.push(r);
     } else {
