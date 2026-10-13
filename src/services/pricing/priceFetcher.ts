@@ -1,3 +1,4 @@
+import config from '../../config/index.js';
 import { query as dbQuery } from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { EbayScraper } from '../scrapers/ebay.js';
@@ -51,6 +52,33 @@ export class PriceFetcher {
   private ebayScraper = new EbayScraper();
   private goatScraper = new GoatScraper();
   private stockxScraper = new StockxScraper();
+
+  // StockX lookups made today (UTC), scheduled and on-demand. In memory, so a
+  // restart resets it; that's fine for a soft daily cap.
+  private stockxDay = '';
+  private stockxUsed = 0;
+
+  private stockxBudgetLeft(): number {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== this.stockxDay) {
+      this.stockxDay = today;
+      this.stockxUsed = 0;
+    }
+    return config.scraper.stockxDailyBudget - this.stockxUsed;
+  }
+
+  /** sku_id -> time of its latest stored StockX price. */
+  private async lastStockxTimes(skuIds: number[]): Promise<Map<number, number>> {
+    const out = new Map<number, number>();
+    if (skuIds.length === 0) return out;
+    const r = await dbQuery<{ sku_id: number; t: Date }>(
+      `SELECT sku_id, MAX(timestamp) AS t FROM prices
+       WHERE source = $1 AND sku_id = ANY($2) GROUP BY sku_id`,
+      [PriceSource.STOCKX, skuIds],
+    );
+    for (const row of r.rows) out.set(row.sku_id, new Date(row.t).getTime());
+    return out;
+  }
 
   /**
    * Helper to add delay between requests
@@ -184,6 +212,8 @@ export class PriceFetcher {
     sku: SKU,
   ): Promise<{ success: boolean; price?: number }> {
     try {
+      this.stockxBudgetLeft(); // rolls the day over
+      this.stockxUsed++;
       logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching StockX prices');
 
       // Strip hyphens and spaces so "DV3054-001", "DV3054 001", "DV3054001" all resolve correctly
@@ -313,8 +343,27 @@ export class PriceFetcher {
 
       const stockxBreaker = new StockxCircuitBreaker();
 
+      // StockX only for SKUs whose stored StockX price is stale for their
+      // tier, and only while today's budget lasts. GOAT/eBay run for all.
+      const lastStockx = skipStockX ? new Map<number, number>() : await this.lastStockxTimes(skus.map((s) => s.id));
+      const now = Date.now();
+      const stockxStats = { attempted: 0, fresh: 0, overBudget: 0 };
+
       for (const sku of skus) {
-        const results = skipStockX
+        const tierKey = (sku.tier === 1 || sku.tier === 2 || sku.tier === 3 ? sku.tier : 2) as 1 | 2 | 3;
+        const staleMs = config.scraper.stockxStaleDays[tierKey] * 86400000;
+        const last = lastStockx.get(sku.id);
+        let wantStockx = !skipStockX;
+        if (wantStockx && last !== undefined && now - last < staleMs) {
+          wantStockx = false;
+          stockxStats.fresh++;
+        } else if (wantStockx && this.stockxBudgetLeft() <= 0) {
+          wantStockx = false;
+          stockxStats.overBudget++;
+        }
+        if (wantStockx) stockxStats.attempted++;
+
+        const results = !wantStockx
           ? { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } }
           : await this.fetchAllPricesForSku(sku, stockxBreaker);
 
@@ -336,7 +385,7 @@ export class PriceFetcher {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
 
-      logger.info({ count: skus.length }, 'Price fetch completed for all SKUs');
+      logger.info({ count: skus.length, tier, stockx: stockxStats, stockxBudgetLeft: this.stockxBudgetLeft() }, 'Price fetch completed for all SKUs');
       return skus.length;
     } catch (error) {
       logger.error(

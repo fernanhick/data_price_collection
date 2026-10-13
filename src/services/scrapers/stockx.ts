@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import puppeteer, { Browser, Page } from 'puppeteer';
 import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
@@ -29,15 +31,39 @@ export class StockxScraper {
     return result;
   }
 
-  private readonly userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-  ];
+  // StockX prices differ per market and the IP decides the default (a UK exit
+  // shows GBP). Pin the US market so every price is USD.
+  private readonly marketCookies = [
+    ['stockx_selected_region', 'US'],
+    ['stockx_selected_currency', 'USD'],
+    ['stockx_selected_locale', 'en'],
+  ].map(([name, value]) => ({ name, value, domain: '.stockx.com', path: '/' }));
 
-  private getRandomUserAgent(): string {
-    return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
+  /**
+   * One consistent identity that matches the real browser: same Chrome major
+   * version in the UA string and the client hints, and the real platform
+   * (Linux). The old random mix (Chrome 120 / Firefox / Safari UA on a Chrome
+   * 145 engine) was an easy bot tell. The untouched HeadlessChrome UA gets
+   * blocked outright, so the override itself must stay.
+   */
+  private async getIdentity(browser: Browser) {
+    const major = (await browser.version()).match(/\/(\d+)\./)?.[1] ?? '145';
+    return {
+      userAgent: `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`,
+      userAgentMetadata: {
+        brands: [
+          { brand: 'Google Chrome', version: major },
+          { brand: 'Chromium', version: major },
+          { brand: 'Not:A-Brand', version: '99' },
+        ],
+        fullVersion: `${major}.0.0.0`,
+        platform: 'Linux',
+        platformVersion: '',
+        architecture: 'x86',
+        model: '',
+        mobile: false,
+      },
+    };
   }
 
   /**
@@ -68,8 +94,9 @@ export class StockxScraper {
     ];
 
     this.proxyAuth = null;
-    if (config.scraper.proxyUrl) {
-      const proxy = new URL(config.scraper.proxyUrl);
+    const proxyUrl = config.scraper.stockxProxyUrl || config.scraper.proxyUrl;
+    if (proxyUrl) {
+      const proxy = new URL(proxyUrl);
       args.push(`--proxy-server=${proxy.protocol}//${proxy.host}`);
       if (proxy.username) {
         this.proxyAuth = {
@@ -82,6 +109,9 @@ export class StockxScraper {
     this.browser = await puppeteer.launch({
       headless: true,
       args,
+      userDataDir:
+        config.scraper.stockxProfileDir ||
+        path.join(os.homedir(), '.cache', 'sneakersbook', 'stockx-profile'),
     });
 
     return this.browser;
@@ -120,8 +150,10 @@ export class StockxScraper {
         await page.authenticate(this.proxyAuth);
       }
 
-      // Set a randomized user agent
-      await page.setUserAgent(this.getRandomUserAgent());
+      const identity = await this.getIdentity(browser);
+      await page.setUserAgent(identity.userAgent, identity.userAgentMetadata);
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+      await page.setCookie(...this.marketCookies);
 
       // Set viewport
       await page.setViewport({ width: 1280, height: 800 });
@@ -188,8 +220,9 @@ export class StockxScraper {
             // Get product name from the link or its children
             const textContent = el.textContent?.trim() || '';
 
-            // Look for price pattern (currency symbol followed by numbers)
-            const priceMatch = textContent.match(/[£$€](\d+(?:,\d{3})*(?:\.\d{2})?)/);
+            // USD only: the market cookies pin USD, and a £/€ price must never
+            // be stored as dollars.
+            const priceMatch = textContent.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
 
             // Get the product name - usually before the price
             let name = '';
@@ -234,6 +267,13 @@ export class StockxScraper {
       }, maxResults);
 
       logger.info({ query, found: listings.length, maxResults }, 'StockX search completed');
+      if (listings.length === 0) {
+        const nonUsd = await page.evaluate(
+          // @ts-ignore - document exists in browser context
+          () => /[£€]\s?\d/.test(document.body ? document.body.innerText : ''),
+        );
+        if (nonUsd) logger.warn({ query }, 'StockX served non-USD prices; ignored');
+      }
 
       return listings.map((l) => ({
         name: l.name,

@@ -86,6 +86,23 @@ const config: AppConfig = {
     timeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS || '10000', 10),
     retryAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
     proxyUrl: process.env.SCRAPER_PROXY_URL || undefined,
+    // StockX only. StockX blocks datacenter (AWS) traffic, so its browser can
+    // exit through a residential connection, e.g. socks5://127.0.0.1:1080 from
+    // the reverse SSH tunnel the home VPS keeps open. Falls back to proxyUrl.
+    stockxProxyUrl: process.env.STOCKX_PROXY_URL || undefined,
+    // Persistent Chrome profile so StockX sees a returning visitor (cookies)
+    // instead of a brand-new browser on every search.
+    stockxProfileDir: process.env.STOCKX_PROFILE_DIR || undefined,
+    // Max StockX lookups per UTC day across scheduled runs and on-demand
+    // lookups, and how old a stored StockX price must be (days, by tier)
+    // before a scheduled run looks it up again. Keeps the residential IP's
+    // traffic modest so it doesn't get flagged like AWS did.
+    stockxDailyBudget: parseInt(process.env.STOCKX_DAILY_BUDGET || '300', 10),
+    stockxStaleDays: {
+      1: parseFloat(process.env.STOCKX_STALE_DAYS_TIER1 || '3'),
+      2: parseFloat(process.env.STOCKX_STALE_DAYS_TIER2 || '7'),
+      3: parseFloat(process.env.STOCKX_STALE_DAYS_TIER3 || '21'),
+    },
     ebay: {
       conditionCodes: (process.env.EBAY_CONDITION_CODES || '1000,1500,3000,4000').split(',').map(c => c.trim()),
       minConditionThreshold: parseInt(process.env.EBAY_MIN_CONDITION || '3000', 10),

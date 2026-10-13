@@ -207,6 +207,10 @@ export interface AppConfig {
     timeoutMs: number;
     retryAttempts: number;
     proxyUrl?: string;
+    stockxProxyUrl?: string;
+    stockxProfileDir?: string;
+    stockxDailyBudget: number;
+    stockxStaleDays: Record<1 | 2 | 3, number>;
     ebay?: {
       conditionCodes?: string[];
       minConditionThreshold?: number;
