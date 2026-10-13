@@ -154,6 +154,8 @@ export class StockxScraper {
       await page.setUserAgent(identity.userAgent, identity.userAgentMetadata);
       await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
       await page.setCookie(...this.marketCookies);
+      // Match the exit IP's location (the home VPS is in the UK); UTC is a server tell.
+      await page.emulateTimezone(process.env.STOCKX_TIMEZONE || 'Europe/London');
 
       // Set viewport
       await page.setViewport({ width: 1280, height: 800 });
