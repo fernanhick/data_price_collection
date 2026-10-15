@@ -48,7 +48,17 @@ export interface Price {
   source: PriceSource;
   price: number;
   timestamp: Date;
+  // GOAT only: which pairs the price describes (see GoatPriceBasis). Null on
+  // rows from before 2026-10-15, when GOAT gave one random size/condition.
+  basis?: GoatPriceBasis | null;
 }
+
+/**
+ * new_box: new pairs with a good box (the normal case); new: new pairs, any
+ * box; used: no new pair listed, so used pairs (old releases). Each is the
+ * median over sizes of each size's lowest ask.
+ */
+export type GoatPriceBasis = 'new_box' | 'new' | 'used';
 
 export interface PriceHistory {
   id: number;
@@ -143,7 +153,13 @@ export interface GOATListing {
   name: string;
   slug: string;
   sku: string;
+  // GOAT product id shared by all of a product's size/condition variants.
+  productTemplateId?: number | null;
+  // getPriceForSku: the market price (see GoatPriceBasis). Search results:
+  // the lowest ask of one variant only (any size, any condition).
   lowestPriceCents: number;
+  priceBasis?: GoatPriceBasis;
+  sizesPriced?: number;
   retailPriceCents: number | null;
   instantShipPriceCents: number | null;
   brand: string;

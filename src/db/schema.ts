@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS prices (
   timestamp TIMESTAMP DEFAULT NOW()
 );
 
+-- GOAT price basis: new_box | new | used (null = before 2026-10-15)
+ALTER TABLE prices ADD COLUMN IF NOT EXISTS basis VARCHAR(20);
+
 CREATE INDEX IF NOT EXISTS idx_prices_sku_id ON prices(sku_id);
 CREATE INDEX IF NOT EXISTS idx_prices_timestamp ON prices(timestamp);
 CREATE INDEX IF NOT EXISTS idx_prices_sku_timestamp ON prices(sku_id, timestamp DESC);

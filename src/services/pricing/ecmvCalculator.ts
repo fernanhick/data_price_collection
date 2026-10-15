@@ -115,8 +115,7 @@ export class ECMVCalculator {
   } {
     return {
       ebay: prices.filter((p) => p.source === 'ebay'),
-      // GOAT's $2000.00 placeholder is never a real price (see priceFetcher).
-      goat: prices.filter((p) => p.source === 'goat' && Number(p.price) !== 2000),
+      goat: this.goatPrices(prices),
       stockx: prices.filter((p) => p.source === 'stockx'),
     };
   }
@@ -200,6 +199,18 @@ export class ECMVCalculator {
   }
 
   /**
+   * GOAT prices to use. GOAT's $2000.00 placeholder is never a real price.
+   * Rows with a basis (from 2026-10-15) describe new pairs across sizes;
+   * older rows were one arbitrary size and condition, often a used pair, so
+   * once a SKU has any basis row in the window the old ones are ignored.
+   */
+  private goatPrices(prices: Price[]): Price[] {
+    const goat = prices.filter((p) => p.source === 'goat' && Number(p.price) !== 2000);
+    const withBasis = goat.filter((p) => p.basis);
+    return withBasis.length > 0 ? withBasis : goat;
+  }
+
+  /**
    * Calculate confidence score
    *
    * High: 3+ sources, <10% variance, Tier 1-2
@@ -223,6 +234,12 @@ export class ECMVCalculator {
     const variance = prices.reduce((sum, p) => sum + Math.pow(p - avg, 2), 0) / prices.length;
     const stdDev = Math.sqrt(variance);
     const coefficientOfVariation = stdDev / avg;
+
+    // GOAT priced from used pairs only (no new pair listed): an estimate of a
+    // worn pair, so never more than Low.
+    if (pricesBySource.goat.length > 0 && pricesBySource.goat.every((p) => p.basis === 'used')) {
+      return ConfidenceLevel.LOW;
+    }
 
     // Determine confidence
     if (sourceCount >= 2 && coefficientOfVariation < 0.1 && tier <= 2) {

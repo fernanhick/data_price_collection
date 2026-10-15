@@ -183,16 +183,16 @@ export class PriceFetcher {
       }
 
       logger.info(
-        { skuCode: sku.sku_code, price: priceInDollars, name: listing.name },
+        { skuCode: sku.sku_code, price: priceInDollars, name: listing.name, basis: listing.priceBasis, sizes: listing.sizesPriced },
         'GOAT price fetched',
       );
 
       // Store price in database
       try {
         await dbQuery(
-          `INSERT INTO prices (sku_id, source, price, timestamp)
-           VALUES ($1, $2, $3, $4)`,
-          [sku.id, PriceSource.GOAT, priceInDollars, listing.timestamp],
+          `INSERT INTO prices (sku_id, source, price, timestamp, basis)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [sku.id, PriceSource.GOAT, priceInDollars, listing.timestamp, listing.priceBasis ?? null],
         );
       } catch (error) {
         logger.debug({ skuCode: sku.sku_code, error }, 'Failed to store GOAT price');

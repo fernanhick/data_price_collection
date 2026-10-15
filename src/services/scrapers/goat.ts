@@ -2,7 +2,20 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
-import { GOATListing } from '../../types/index.js';
+import { GOATListing, GoatPriceBasis } from '../../types/index.js';
+
+// GOAT's $2000.00 placeholder, never a real ask (also seen per variant).
+const PLACEHOLDER_CENTS = 200000;
+
+// Which variants a market price is built from, best first. GOAT's search
+// index has one entry per size AND condition, so a style-code search's first
+// hit is an arbitrary size and often a used, no-box pair (Panda: a used 6.5
+// at $39 while new boxed pairs were $57-83).
+const PRICE_BASES: [GoatPriceBasis, string][] = [
+  ['new_box', 'shoe_condition:new_no_defects AND box_condition:good_condition'],
+  ['new', 'shoe_condition:new_no_defects'],
+  ['used', 'shoe_condition:used'],
+];
 import { cleanImageUrl } from '../../utils/imageUrl.js';
 
 /**
@@ -68,6 +81,7 @@ export class GoatScraper {
           name: hit.name || '',
           slug: hit.slug || '',
           sku: hit.sku || hit.search_sku || '',
+          productTemplateId: hit.product_template_id ?? null,
           lowestPriceCents: hit.lowest_price_cents,
           retailPriceCents: hit.retail_price_cents || null,
           instantShipPriceCents: hit.instant_ship_lowest_price_cents || null,
@@ -121,6 +135,7 @@ export class GoatScraper {
         name: hit.name || '',
         slug: hit.slug || '',
         sku: hit.sku || hit.search_sku || '',
+        productTemplateId: hit.product_template_id ?? null,
         lowestPriceCents: hit.lowest_price_cents || 0,
         retailPriceCents: hit.retail_price_cents || null,
         instantShipPriceCents: hit.instant_ship_lowest_price_cents || null,
@@ -147,25 +162,89 @@ export class GoatScraper {
    * @param sku - The product SKU code
    * @returns Price data if found
    */
+  /**
+   * The GOAT product for a style code (exact match, else the first result),
+   * for its metadata: name, brand, colorway, retail price, image. Its
+   * lowestPriceCents is one arbitrary variant's ask, not a market price; use
+   * getPriceForSku for that.
+   */
+  async findProduct(sku: string): Promise<GOATListing | null> {
+    const listings = await this.searchProducts(sku, 5);
+
+    // Find exact SKU match — strip both spaces and hyphens for comparison
+    // so "1201A482-102", "1201A482 102", and "1201A482102" all match
+    const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
+    const exactMatch = listings.find((l) => normalize(l.sku) === normalize(sku));
+
+    // Fall back to the first result if no exact match
+    return exactMatch ?? listings[0] ?? null;
+  }
+
   async getPriceForSku(sku: string): Promise<GOATListing | null> {
     try {
-      const listings = await this.searchProducts(sku, 5);
-
-      // Find exact SKU match — strip both spaces and hyphens for comparison
-      // so "1201A482-102", "1201A482 102", and "1201A482102" all match
-      const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
-      const exactMatch = listings.find((l) => normalize(l.sku) === normalize(sku));
-
-      if (exactMatch) {
-        return exactMatch;
+      const listing = await this.findProduct(sku);
+      if (!listing) return null;
+      if (!listing.productTemplateId) {
+        logger.warn({ sku, name: listing.name }, 'GOAT result without product id; no price');
+        return null;
       }
 
-      // Return first result if no exact match
-      return listings.length > 0 ? listings[0] : null;
+      const market = await this.marketPrice(listing.productTemplateId);
+      if (!market) {
+        logger.info({ sku, name: listing.name }, 'GOAT has no priced pairs for this product');
+        return null;
+      }
+      return {
+        ...listing,
+        lowestPriceCents: market.cents,
+        priceBasis: market.basis,
+        sizesPriced: market.sizes,
+      };
     } catch (error) {
       logger.error({ sku, error: error instanceof Error ? error.message : String(error) }, 'Failed to get GOAT price');
       return null;
     }
+  }
+
+  /**
+   * Market price of one GOAT product: each size's lowest ask, then the median
+   * across sizes, from the best basis that has any priced pair. The median
+   * keeps one cheap or odd size from setting the price and works the same
+   * for men's, women's and kids' size runs.
+   */
+  private async marketPrice(
+    productTemplateId: number,
+  ): Promise<{ cents: number; basis: GoatPriceBasis; sizes: number } | null> {
+    for (const [basis, condition] of PRICE_BASES) {
+      const response = await axios.post(
+        this.algoliaUrl,
+        { query: '', hitsPerPage: 500, filters: `product_template_id:${productTemplateId} AND ${condition}` },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-algolia-api-key': this.algoliaApiKey,
+            'x-algolia-application-id': this.algoliaAppId,
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          timeout: 10000,
+          ...this.proxyAxiosOptions,
+        },
+      );
+      const perSize = new Map<string, number>();
+      for (const hit of response.data.hits || []) {
+        const cents = hit.lowest_price_cents;
+        if (!cents || cents <= 0 || cents === PLACEHOLDER_CENTS) continue;
+        const size = String(hit.size);
+        perSize.set(size, Math.min(perSize.get(size) ?? Infinity, cents));
+      }
+      if (perSize.size === 0) continue;
+      const sorted = [...perSize.values()].sort((a, b) => a - b);
+      const mid = sorted.length >> 1;
+      const median = sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+      return { cents: median, basis, sizes: perSize.size };
+    }
+    return null;
   }
 
   /**

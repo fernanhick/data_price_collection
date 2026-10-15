@@ -42,7 +42,8 @@ interface MarketplaceResult {
 }
 
 async function lookupGoat(styleCode: string): Promise<MarketplaceResult | null> {
-  const listing = await goatScraper.getPriceForSku(styleCode).catch((err) => {
+  // Metadata only (brand, colorway, retail, image): no market-price requests.
+  const listing = await goatScraper.findProduct(styleCode).catch((err) => {
     console.warn(`[CatalogReview] GOAT lookup error for ${styleCode}:`, err);
     return null;
   });
