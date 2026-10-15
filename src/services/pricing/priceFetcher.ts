@@ -5,6 +5,7 @@ import { EbayScraper } from '../scrapers/ebay.js';
 import { GoatScraper } from '../scrapers/goat.js';
 import stockxScraper from '../scrapers/stockx.js';
 import { PriceSource, SKU } from '../../types/index.js';
+import ecmvPersistence from './ecmvPersistence.js';
 import {
   StockxLookupSource,
   StockxLookupStatus,
@@ -266,7 +267,11 @@ export class PriceFetcher {
    * Pass a shared `stockxBreaker` across a batch run to stop hitting StockX after
    * repeated consecutive failures (likely IP block).
    */
-  async fetchAllPricesForSku(sku: SKU, stockxBreaker?: StockxCircuitBreaker): Promise<{
+  async fetchAllPricesForSku(
+    sku: SKU,
+    stockxBreaker?: StockxCircuitBreaker,
+    stockxSource: StockxLookupSource = 'tier_run',
+  ): Promise<{
     ebay: { success: boolean; price?: number };
     goat: { success: boolean; price?: number };
     stockx: StockxResult;
@@ -286,7 +291,7 @@ export class PriceFetcher {
     await this.delay(stockxDelay);
 
     // Fetch StockX separately
-    const stockxResult = await this.fetchStockxPricesForSku(sku);
+    const stockxResult = await this.fetchStockxPricesForSku(sku, stockxSource);
     // "Not listed on StockX" is a normal miss, not a sign of a block.
     stockxBreaker?.recordResult(stockxResult.status !== 'error');
 
@@ -295,6 +300,18 @@ export class PriceFetcher {
       goat: goatResult,
       stockx: stockxResult,
     };
+  }
+
+  /**
+   * First prices for a sneaker a user just added to the catalog: every source,
+   * StockX included even when today's StockX budget is spent, then the
+   * estimate right away. The app reads only stored estimates, so without this
+   * a new sneaker showed "no price" until the next 6-hourly ECMV run.
+   */
+  async fetchInitialPrices(sku: SKU) {
+    const results = await this.fetchAllPricesForSku(sku, undefined, 'new_sku');
+    const saved = await ecmvPersistence.calculateAndSave(sku, 'new_sku');
+    return { ...results, ecmv: saved?.ecmv ?? null };
   }
 
   /**

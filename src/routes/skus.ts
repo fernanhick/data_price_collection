@@ -537,10 +537,10 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       } as SKU;
       const { model: nm, colorway: ncv } = parseName(c.name, c.brand);
       priceFetcher
-        .fetchAllPricesForSku(newSku)
+        .fetchInitialPrices(newSku)
         .then((r: any) => {
           logger.info(
-            { styleCode: c.actualStyleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
+            { styleCode: c.actualStyleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success, ecmv: r.ecmv },
             'Background price fetch complete for new SKU',
           );
           notifier.priceFetchResult({
@@ -692,9 +692,9 @@ lookupRouter.post('/select', async (req: Request, res: Response): Promise<void> 
     } as SKU;
 
     priceFetcher
-      .fetchAllPricesForSku(savedSku)
+      .fetchInitialPrices(savedSku)
       .then((r: any) => logger.info(
-        { styleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success },
+        { styleCode, ebay: r.ebay?.success, goat: r.goat?.success, stockx: r.stockx?.success, ecmv: r.ecmv },
         'Background price fetch complete after select',
       ))
       .catch((err: any) => logger.warn({ err, styleCode }, 'Background price fetch failed after select'));

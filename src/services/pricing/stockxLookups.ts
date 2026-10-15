@@ -1,7 +1,8 @@
 import { query as dbQuery } from '../../db/index.js';
 import logger from '../../utils/logger.js';
 
-export type StockxLookupSource = 'queue' | 'tier_run' | 'on_demand';
+// new_sku = first price for a sneaker a user just added (never budget-gated).
+export type StockxLookupSource = 'queue' | 'tier_run' | 'on_demand' | 'new_sku';
 export type StockxLookupStatus = 'ok' | 'not_found' | 'error';
 
 /**
