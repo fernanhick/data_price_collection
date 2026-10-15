@@ -17,6 +17,7 @@ const PRICE_BASES: [GoatPriceBasis, string][] = [
   ['used', 'shoe_condition:used'],
 ];
 import { cleanImageUrl } from '../../utils/imageUrl.js';
+import { GoatRequestKind, beforeGoatRequest, goatRequestFailed, goatRequestSucceeded } from './goatUsage.js';
 
 /**
  * GOAT Price Scraper
@@ -40,6 +41,29 @@ export class GoatScraper {
     };
   }
 
+  /** Every GOAT request goes through here: counted, and paused on a block (goatUsage.ts). */
+  private async algolia(kind: GoatRequestKind, body: Record<string, unknown>): Promise<any> {
+    await beforeGoatRequest(kind);
+    try {
+      const response = await axios.post(this.algoliaUrl, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-algolia-api-key': this.algoliaApiKey,
+          'x-algolia-application-id': this.algoliaAppId,
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        timeout: 10000,
+        ...this.proxyAxiosOptions,
+      });
+      await goatRequestSucceeded(kind);
+      return response.data;
+    } catch (error) {
+      await goatRequestFailed(kind, error);
+      throw error;
+    }
+  }
+
   /**
    * Search for sneaker prices on GOAT
    * @param query - Search query (e.g., "Jordan 1 Bred")
@@ -50,27 +74,13 @@ export class GoatScraper {
     try {
       logger.info({ query, maxResults }, 'Starting GOAT search');
 
-      const response = await axios.post(
-        this.algoliaUrl,
-        {
-          query,
-          hitsPerPage: maxResults,
-          filters: 'product_category:shoes',
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-algolia-api-key': this.algoliaApiKey,
-            'x-algolia-application-id': this.algoliaAppId,
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          timeout: 10000,
-          ...this.proxyAxiosOptions,
-        },
-      );
+      const data = await this.algolia('search', {
+        query,
+        hitsPerPage: maxResults,
+        filters: 'product_category:shoes',
+      });
 
-      const hits = response.data.hits || [];
+      const hits = data.hits || [];
       const listings: GOATListing[] = [];
 
       for (const hit of hits) {
@@ -115,22 +125,13 @@ export class GoatScraper {
     try {
       logger.info({ query, maxResults }, 'Starting GOAT discovery search');
 
-      const response = await axios.post(
-        this.algoliaUrl,
-        { query, hitsPerPage: maxResults, filters: 'product_category:shoes' },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-algolia-api-key': this.algoliaApiKey,
-            'x-algolia-application-id': this.algoliaAppId,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-          timeout: 10000,
-          ...this.proxyAxiosOptions,
-        },
-      );
+      const data = await this.algolia('discovery', {
+        query,
+        hitsPerPage: maxResults,
+        filters: 'product_category:shoes',
+      });
 
-      const hits = response.data.hits || [];
+      const hits = data.hits || [];
       const listings: GOATListing[] = hits.map((hit: any) => ({
         name: hit.name || '',
         slug: hit.slug || '',
@@ -158,11 +159,6 @@ export class GoatScraper {
   }
 
   /**
-   * Search and get prices for a specific SKU
-   * @param sku - The product SKU code
-   * @returns Price data if found
-   */
-  /**
    * The GOAT product for a style code (exact match, else the first result),
    * for its metadata: name, brand, colorway, retail price, image. Its
    * lowestPriceCents is one arbitrary variant's ask, not a market price; use
@@ -180,6 +176,10 @@ export class GoatScraper {
     return exactMatch ?? listings[0] ?? null;
   }
 
+  /**
+   * Market price for a style code: new pairs with a box, median across sizes
+   * (see marketPrice). Null when GOAT has no priced pair or is unreachable.
+   */
   async getPriceForSku(sku: string): Promise<GOATListing | null> {
     try {
       const listing = await this.findProduct(sku);
@@ -216,23 +216,13 @@ export class GoatScraper {
     productTemplateId: number,
   ): Promise<{ cents: number; basis: GoatPriceBasis; sizes: number } | null> {
     for (const [basis, condition] of PRICE_BASES) {
-      const response = await axios.post(
-        this.algoliaUrl,
-        { query: '', hitsPerPage: 500, filters: `product_template_id:${productTemplateId} AND ${condition}` },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-algolia-api-key': this.algoliaApiKey,
-            'x-algolia-application-id': this.algoliaAppId,
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          timeout: 10000,
-          ...this.proxyAxiosOptions,
-        },
-      );
+      const data = await this.algolia('variants', {
+        query: '',
+        hitsPerPage: 500,
+        filters: `product_template_id:${productTemplateId} AND ${condition}`,
+      });
       const perSize = new Map<string, number>();
-      for (const hit of response.data.hits || []) {
+      for (const hit of data.hits || []) {
         const cents = hit.lowest_price_cents;
         if (!cents || cents <= 0 || cents === PLACEHOLDER_CENTS) continue;
         const size = String(hit.size);

@@ -139,6 +139,16 @@ CREATE INDEX IF NOT EXISTS idx_upcoming_releases_brand ON upcoming_releases(bran
 -- "DD1391 100"): see src/db/styleCode.ts.
 CREATE UNIQUE INDEX IF NOT EXISTS skus_style_key_unique ON skus ((upper(translate(style_code, '- ', ''))));
 
+-- GOAT requests per UTC day, kind (search | discovery | variants) and outcome
+-- (ok | rate_limited | forbidden | error | paused). See goatUsage.ts.
+CREATE TABLE IF NOT EXISTS goat_requests (
+  day DATE NOT NULL,
+  kind VARCHAR(20) NOT NULL,
+  outcome VARCHAR(20) NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, kind, outcome)
+);
+
 -- Every StockX lookup (queue, tier run or on-demand). Drives the daily budget
 -- (survives restarts) and backs off SKUs StockX doesn't list.
 CREATE TABLE IF NOT EXISTS stockx_lookups (
