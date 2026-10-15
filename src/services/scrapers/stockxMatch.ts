@@ -32,6 +32,42 @@ export interface MatchTarget {
 export interface MatchCandidate {
   name: string;
   lowestAsk: number | null;
+  // StockX productCategory: "sneakers" for all footwear (slides, mules and
+  // boots included), "streetwear" for apparel, then collectibles, handbags,
+  // watches, trading cards... null when the page didn't say.
+  category?: string | null;
+}
+
+// Our catalog has no reliable category (mostly empty), but a few dozen SKUs
+// are apparel or accessories. Recognise them by name.
+const NON_FOOTWEAR = new RegExp(
+  '\\b(hoodie|hoody|tee|t-shirt|tshirt|shirt|polo|jersey|jacket|vest|sweatshirt|sweater|crewneck|pullover|' +
+    'pants|trousers|shorts|joggers|sweatpants|leggings|socks?|cap|hat|beanie|bucket hat|gloves|scarf|' +
+    'bag|backpack|tote|wallet|keychain|watch|figure|poster|lego)\\b',
+  'i',
+);
+
+// Shoe words that win over the list above: "LEGO x UltraBoost", "Nardwuar x
+// Dunk Low SB Tam O'Shanter Hat" are shoes.
+const FOOTWEAR = /\b(ultra ?boost|boost|dunk|air max|air force|chuck|retro|yeezy|foamposite|sneakers?|shoes?|slides?|clogs?|boots?|trainers?|runners?)\b/i;
+
+/**
+ * "sneakers" for footwear SKUs (the default), "other" for apparel and
+ * accessories. Looks at the model only: colorways name shoes after clothes
+ * ("Cap and Gown", "Lucky Shorts", "Christmas Sweater", "Bag Lady").
+ */
+export function expectedCategory(target: MatchTarget | undefined): 'sneakers' | 'other' {
+  const model = target?.model ?? '';
+  return NON_FOOTWEAR.test(model) && !FOOTWEAR.test(model) ? 'other' : 'sneakers';
+}
+
+/**
+ * Never price a shoe with a non-shoe (or the reverse). Results without a
+ * category (older markup) are let through to the name match.
+ */
+export function categoryAllowed(expected: 'sneakers' | 'other', category: string | null | undefined): boolean {
+  if (!category) return true;
+  return expected === 'sneakers' ? category === 'sneakers' : category !== 'sneakers';
 }
 
 export interface MatchResult<T> {

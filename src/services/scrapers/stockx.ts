@@ -7,7 +7,7 @@ import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
 import { StockXListing } from '../../types/index.js';
 import { StockxLookupStatus, recordStockxLookup } from '../pricing/stockxLookups.js';
-import { MatchTarget, pickMatch } from './stockxMatch.js';
+import { MatchTarget, categoryAllowed, expectedCategory, pickMatch } from './stockxMatch.js';
 
 export interface StockxLookupResult {
   status: StockxLookupStatus;
@@ -20,6 +20,7 @@ interface SearchHit {
   urlKey: string;
   url: string;
   lowestAsk: number | null;
+  category: string | null;
 }
 
 interface SearchOutcome {
@@ -281,8 +282,32 @@ export class StockxScraper {
 
       // Extract product data
       const listings = await page.evaluate((max) => {
-        const products: { name: string; urlKey: string; url: string; lowestAsk: number | null }[] = [];
+        const products: {
+          name: string;
+          urlKey: string;
+          url: string;
+          lowestAsk: number | null;
+          category: string | null;
+        }[] = [];
         const seenUrls = new Set<string>();
+
+        // The page embeds its search results as JSON (__NEXT_DATA__) with each
+        // product's category; the tiles don't show it. urlKey -> category.
+        const categories = new Map<string, string>();
+        try {
+          // @ts-ignore - document exists in browser context
+          const raw = document.getElementById('__NEXT_DATA__')?.textContent;
+          const walk = (o: any): void => {
+            if (!o || typeof o !== 'object') return;
+            if (typeof o.urlKey === 'string' && typeof o.productCategory === 'string') {
+              categories.set(o.urlKey, o.productCategory);
+            }
+            for (const v of Object.values(o)) walk(v);
+          };
+          if (raw) walk(JSON.parse(raw));
+        } catch (e) {
+          // No category info; the name match still applies.
+        }
         // USD only: the market cookies pin USD, and a £/€ price must never
         // be stored as dollars.
         const usd = (text: string) => {
@@ -295,11 +320,13 @@ export class StockxScraper {
           if (needPrice && price === null) return;
           if (!href || seenUrls.has(href)) return;
           seenUrls.add(href);
+          const urlKey = href.split('/').pop() || '';
           products.push({
             name,
-            urlKey: href.split('/').pop() || '',
+            urlKey,
             url: href.startsWith('http') ? href : `https://stockx.com${href}`,
             lowestAsk: price,
+            category: categories.get(urlKey) ?? null,
           });
         };
 
@@ -469,14 +496,26 @@ export class StockxScraper {
    */
   async lookup(query: string, match?: MatchTarget): Promise<StockxLookupResult> {
     try {
-      const { listings, hits, error } = await this.search(query, 20);
+      const { hits: allHits, error } = await this.search(query, 20);
       if (error) return { status: 'error', listing: null };
-      if (!match) {
-        return listings.length > 0
-          ? { status: 'ok', listing: listings[0] }
-          : { status: 'not_found', listing: null };
+
+      // Only the same kind of product: a shoe is never priced with a LEGO set,
+      // a keychain or jeans. On-demand scans (no match target) are shoes.
+      const expected = expectedCategory(match);
+      const hits = allHits.filter((h) => categoryAllowed(expected, h.category));
+      if (hits.length < allHits.length) {
+        logger.info(
+          { query, expected, dropped: allHits.filter((h) => !hits.includes(h)).map((h) => `${h.name} (${h.category})`) },
+          'StockX results of another product type ignored',
+        );
       }
 
+      if (!match) {
+        const first = hits.find((h) => h.lowestAsk !== null);
+        return first ? { status: 'ok', listing: this.toListing(first) } : { status: 'not_found', listing: null };
+      }
+
+      const listings = hits.filter((h) => h.lowestAsk !== null);
       const { best, score } = pickMatch(match, hits);
       if (!best) {
         logger.info({ query, match, score, top: hits[0]?.name }, 'No StockX result matches our sneaker');
