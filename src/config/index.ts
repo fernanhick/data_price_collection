@@ -99,6 +99,12 @@ const config: AppConfig = {
     // traffic modest so it doesn't get flagged like AWS did. Usage is counted
     // in the stockx_lookups table, so a restart no longer resets it.
     stockxDailyBudget: parseInt(process.env.STOCKX_DAILY_BUDGET || '400', 10),
+    // First StockX price for sneakers users add (not yet in the catalog) has
+    // its own allowance on top of the daily budget. The cap only guards the
+    // residential IP against a runaway (bug, scripted adds); busiest day so
+    // far was ~104. Past it, new sneakers get GOAT/eBay now and StockX from
+    // the queue, which takes never-priced SKUs first.
+    stockxNewSkuDailyCap: parseInt(process.env.STOCKX_NEW_SKU_DAILY_CAP || '250', 10),
     // StockX runs from its own queue, paced across the whole UTC day, instead
     // of inside the tier runs (which spent the whole budget on tier 1 by
     // breakfast). Each tier is guaranteed this share (percent) of the budget

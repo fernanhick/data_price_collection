@@ -210,6 +210,7 @@ export interface AppConfig {
     stockxProxyUrl?: string;
     stockxProfileDir?: string;
     stockxDailyBudget: number;
+    stockxNewSkuDailyCap: number;
     stockxStaleDays: Record<1 | 2 | 3, number>;
     stockxQueueEnabled: boolean;
     stockxTierShares: Record<1 | 2 | 3, number>;

@@ -51,8 +51,15 @@ export async function recordStockxLookup(opts: {
   }
 }
 
-/** Lookups made since UTC midnight: total, and per tier for queue lookups. */
-export async function stockxLookupsToday(): Promise<{ total: number; queueByTier: Record<1 | 2 | 3, number> }> {
+/**
+ * Lookups made since UTC midnight. `total` is what counts against the daily
+ * budget: every source except new_sku, which has its own allowance.
+ */
+export async function stockxLookupsToday(): Promise<{
+  total: number;
+  newSku: number;
+  queueByTier: Record<1 | 2 | 3, number>;
+}> {
   await ensureStockxLookupsTable();
   const r = await dbQuery<{ tier: number | null; source: string; n: number }>(
     `SELECT tier, source, COUNT(*)::int AS n FROM stockx_lookups
@@ -61,11 +68,16 @@ export async function stockxLookupsToday(): Promise<{ total: number; queueByTier
   );
   const queueByTier: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
   let total = 0;
+  let newSku = 0;
   for (const row of r.rows) {
+    if (row.source === 'new_sku') {
+      newSku += row.n;
+      continue;
+    }
     total += row.n;
     if (row.source === 'queue' && (row.tier === 1 || row.tier === 2 || row.tier === 3)) {
       queueByTier[row.tier] += row.n;
     }
   }
-  return { total, queueByTier };
+  return { total, newSku, queueByTier };
 }

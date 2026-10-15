@@ -53,7 +53,11 @@ export class StockxQueue {
     if (this.running) return;
     this.running = true;
     logger.info(
-      { budget: config.scraper.stockxDailyBudget, shares: config.scraper.stockxTierShares },
+      {
+        budget: config.scraper.stockxDailyBudget,
+        newSkuCap: config.scraper.stockxNewSkuDailyCap,
+        shares: config.scraper.stockxTierShares,
+      },
       'StockX queue started',
     );
     this.schedule(jitter(2 * 60_000));

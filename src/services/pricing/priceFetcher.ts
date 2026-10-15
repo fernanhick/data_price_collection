@@ -304,12 +304,23 @@ export class PriceFetcher {
 
   /**
    * First prices for a sneaker a user just added to the catalog: every source,
-   * StockX included even when today's StockX budget is spent, then the
+   * StockX from its own new-sneaker allowance (not the daily budget), then the
    * estimate right away. The app reads only stored estimates, so without this
    * a new sneaker showed "no price" until the next 6-hourly ECMV run.
    */
   async fetchInitialPrices(sku: SKU) {
-    const results = await this.fetchAllPricesForSku(sku, undefined, 'new_sku');
+    const { newSku } = await stockxLookupsToday();
+    let results;
+    if (newSku < config.scraper.stockxNewSkuDailyCap) {
+      results = await this.fetchAllPricesForSku(sku, undefined, 'new_sku');
+    } else {
+      // Allowance spent: StockX comes from the queue (never-priced SKUs first).
+      logger.warn(
+        { skuCode: sku.sku_code, newSku, cap: config.scraper.stockxNewSkuDailyCap },
+        'New-sneaker StockX allowance spent; StockX left to the queue',
+      );
+      results = { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } as StockxResult };
+    }
     const saved = await ecmvPersistence.calculateAndSave(sku, 'new_sku');
     return { ...results, ecmv: saved?.ecmv ?? null };
   }
