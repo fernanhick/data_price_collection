@@ -247,39 +247,44 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
       [sku.id],
     );
 
-    // Carry the last known estimate forward to today. Estimates are only
-    // written when new prices arrive, so a quiet sneaker's chart used to stop
-    // at its last price (or be empty if that was before the window). Product
-    // rule: the last known value stands until a new one replaces it. One point
-    // per day, flagged carried_forward with the date it really comes from.
+    // Carry the last known estimate forward. Estimates are only written when
+    // new prices arrive, so a quiet sneaker's chart had holes between real
+    // points and stopped at its last one (or was empty if that was before the
+    // window). Product rule: the last known value stands until a new one
+    // replaces it. Every gap of a day or more, and the stretch up to today, is
+    // filled with one point per day flagged carried_forward, carrying the
+    // date the value really comes from.
+    const DAY = 86400000;
+    const now = Date.now();
+    const windowStart = now - daysNum * DAY;
+    const before = (
+      await dbQuery(
+        `SELECT * FROM price_history WHERE sku_id = $1 AND timestamp <= NOW() - INTERVAL '${daysNum} days'
+         ORDER BY timestamp DESC LIMIT 1`,
+        [sku.id],
+      )
+    ).rows[0];
+    const series: any[] = before ? [before, ...historyResult.rows] : [...historyResult.rows];
     const history: any[] = [...historyResult.rows];
-    let last = history[history.length - 1];
-    if (!last) {
-      last = (
-        await dbQuery(
-          `SELECT * FROM price_history WHERE sku_id = $1 ORDER BY timestamp DESC LIMIT 1`,
-          [sku.id],
-        )
-      ).rows[0];
-    }
-    if (last) {
-      const DAY = 86400000;
-      const now = Date.now();
-      const windowStart = now - daysNum * DAY;
-      const from = new Date(last.timestamp).getTime();
-      // Next carried point: a day after the real one, or the window start.
-      let t = Math.max(from + DAY, windowStart);
-      if (history.length === 0 && from < windowStart) t = windowStart;
-      for (; t <= now; t += DAY) {
-        history.push({
-          ...last,
-          id: null,
-          timestamp: new Date(t).toISOString(),
-          carried_forward: true,
-          carried_from: last.timestamp,
-        });
+    const carry = (from: any, t: number) =>
+      history.push({
+        ...from,
+        id: null,
+        timestamp: new Date(t).toISOString(),
+        carried_forward: true,
+        carried_from: from.carried_from ?? from.timestamp,
+      });
+    for (let i = 0; i < series.length; i++) {
+      const from = series[i];
+      const next = series[i + 1];
+      const until = next ? new Date(next.timestamp).getTime() : now + 1;
+      // A value from before the window still opens it (first point lands
+      // within a day of the window start).
+      for (let t = new Date(from.timestamp).getTime() + DAY; t < until; t += DAY) {
+        if (t >= windowStart) carry(from, t);
       }
     }
+    history.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     // Get raw prices too
     const pricesResult = await dbQuery(
