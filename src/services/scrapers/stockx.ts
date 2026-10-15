@@ -269,69 +269,65 @@ export class StockxScraper {
 
       // Extract product data
       const listings = await page.evaluate((max) => {
-        const products: any[] = [];
+        const products: { name: string; urlKey: string; url: string; lowestAsk: number }[] = [];
+        const seenUrls = new Set<string>();
+        // USD only: the market cookies pin USD, and a £/€ price must never
+        // be stored as dollars.
+        const usd = (text: string) => {
+          const m = text.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+          return m ? parseFloat(m[1].replace(/,/g, '')) : null;
+        };
+        const add = (name: string, href: string, price: number | null) => {
+          if (products.length >= max || !name || name.length <= 5 || !price || price <= 0) return;
+          if (!href || seenUrls.has(href)) return;
+          seenUrls.add(href);
+          products.push({
+            name,
+            urlKey: href.split('/').pop() || '',
+            url: href.startsWith('http') ? href : `https://stockx.com${href}`,
+            lowestAsk: price,
+          });
+        };
 
-        // Find all product links - StockX uses links to product pages
+        // Current markup (since 2026-10-15): each result is a
+        // div[data-testid=ProductTile] holding an empty overlay link
+        // <a aria-label="<name>" href="/<slug>">, the name in a <p> and the
+        // lowest ask in a <span>. The price is no longer inside the link.
+        // @ts-ignore - document exists in browser context
+        const tiles = Array.from(document.querySelectorAll('[data-testid="ProductTile"]')) as any[];
+        for (const tile of tiles) {
+          // Sponsored tiles (trading cards etc.) carry an "Ad"/"Sponsored" label.
+          const labels = Array.from(tile.querySelectorAll('span, p, div')) as any[];
+          if (labels.some((el) => el.children.length === 0 && /^(Ad|Sponsored)$/i.test((el.textContent || '').trim()))) {
+            continue;
+          }
+          const link = tile.querySelector('a[href]');
+          const name = (link?.getAttribute('aria-label') || tile.querySelector('p')?.textContent || '').trim();
+          const priceText = (Array.from(tile.querySelectorAll('span')) as any[])
+            .map((el) => el.textContent || '')
+            .find((t: string) => /\$\d/.test(t));
+          add(name, link?.getAttribute('href') || '', usd(priceText || ''));
+        }
+        if (tiles.length > 0) return products;
+
+        // Older markup: the whole card was a link containing name and price.
         // @ts-ignore - document exists in browser context
         const productLinks = document.querySelectorAll('a[href*="/"]');
-
-        const seenUrls = new Set<string>();
-
         // @ts-ignore - el is HTMLElement in browser context
         productLinks.forEach((el) => {
-          if (products.length >= max) return;
-
           try {
             const href = el.getAttribute('href') || '';
-
-            // Only process product links (not category links, etc.)
             if (!href.includes('/') || href.includes('/search') || href.includes('/browse')) return;
-
-            // Skip duplicates
-            if (seenUrls.has(href)) return;
-            seenUrls.add(href);
-
-            // Get product name from the link or its children
             const textContent = el.textContent?.trim() || '';
-
-            // USD only: the market cookies pin USD, and a £/€ price must never
-            // be stored as dollars.
-            const priceMatch = textContent.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
-
-            // Get the product name - usually before the price
-            let name = '';
-            const nameEl = el.querySelector('p, span, div');
-            if (nameEl) {
-              name = nameEl.textContent?.trim() || '';
-            }
-
-            // If no specific name element, try to extract from text content
-            if (!name && textContent) {
-              // Remove price and get the rest as name
-              name = textContent.replace(/[£$€][\d,]+(?:\.\d{2})?/g, '').trim();
-            }
-
-            const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
-
-            // Only add if we have a valid product (name contains "Jordan" or other keywords and has a price)
-            if (name && price && price > 0 && name.length > 5) {
-              // Clean the name - remove "Lowest Ask", "Xpress Ship", etc.
-              let cleanName = name
-                .replace(/Lowest Ask.*$/i, '')
-                .replace(/Xpress Ship.*$/i, '')
-                .replace(/Sponsored.*$/i, '')
-                .replace(/US [MW] \d+.*$/i, '')
-                .trim();
-
-              if (cleanName.length > 5) {
-                products.push({
-                  name: cleanName,
-                  urlKey: href.split('/').pop() || '',
-                  url: href.startsWith('http') ? href : `https://stockx.com${href}`,
-                  lowestAsk: price,
-                });
-              }
-            }
+            let name = el.querySelector('p, span, div')?.textContent?.trim() || '';
+            if (!name && textContent) name = textContent.replace(/[£$€][\d,]+(?:\.\d{2})?/g, '').trim();
+            name = name
+              .replace(/Lowest Ask.*$/i, '')
+              .replace(/Xpress Ship.*$/i, '')
+              .replace(/Sponsored.*$/i, '')
+              .replace(/US [MW] \d+.*$/i, '')
+              .trim();
+            add(name, href, usd(textContent));
           } catch (e) {
             // Skip this element
           }
@@ -355,6 +351,18 @@ export class StockxScraper {
         if (nonUsd) {
           logger.warn({ query }, 'StockX served non-USD prices; ignored');
           return { listings: [], error: 'non-USD prices' };
+        }
+        // StockX says it has results but none could be read: the page markup
+        // changed under the parser. An error (trips the breaker + Telegram),
+        // not a quiet "not listed" like the silent 2026-10-15 outage.
+        const resultCount = await page.evaluate(() => {
+          // @ts-ignore - document exists in browser context
+          const m = (document.body ? document.body.innerText : '').match(/Browse ([\d,]+) results/);
+          return m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
+        });
+        if (resultCount > 0) {
+          logger.error({ query, resultCount }, 'StockX listed results the parser could not read');
+          return { listings: [], error: `unparsed results: ${resultCount}` };
         }
       }
 
