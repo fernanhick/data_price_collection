@@ -131,4 +131,18 @@ CREATE TABLE IF NOT EXISTS upcoming_releases (
 
 CREATE INDEX IF NOT EXISTS idx_upcoming_releases_release_date ON upcoming_releases(release_date);
 CREATE INDEX IF NOT EXISTS idx_upcoming_releases_brand ON upcoming_releases(brand);
+
+-- Every StockX lookup (queue, tier run or on-demand). Drives the daily budget
+-- (survives restarts) and backs off SKUs StockX doesn't list.
+CREATE TABLE IF NOT EXISTS stockx_lookups (
+  id SERIAL PRIMARY KEY,
+  sku_id INTEGER REFERENCES skus(id) ON DELETE CASCADE,
+  tier SMALLINT,
+  source VARCHAR(20) NOT NULL,   -- queue | tier_run | on_demand
+  status VARCHAR(20) NOT NULL,   -- ok | not_found | error
+  at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stockx_lookups_at ON stockx_lookups(at DESC);
+CREATE INDEX IF NOT EXISTS idx_stockx_lookups_sku_at ON stockx_lookups(sku_id, at DESC);
 `;

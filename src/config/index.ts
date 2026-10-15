@@ -96,8 +96,19 @@ const config: AppConfig = {
     // Max StockX lookups per UTC day across scheduled runs and on-demand
     // lookups, and how old a stored StockX price must be (days, by tier)
     // before a scheduled run looks it up again. Keeps the residential IP's
-    // traffic modest so it doesn't get flagged like AWS did.
+    // traffic modest so it doesn't get flagged like AWS did. Usage is counted
+    // in the stockx_lookups table, so a restart no longer resets it.
     stockxDailyBudget: parseInt(process.env.STOCKX_DAILY_BUDGET || '300', 10),
+    // StockX runs from its own queue, paced across the whole UTC day, instead
+    // of inside the tier runs (which spent the whole budget on tier 1 by
+    // breakfast). Each tier is guaranteed this share (percent) of the budget
+    // while it has stale SKUs; a tier with nothing stale frees its share.
+    stockxQueueEnabled: process.env.STOCKX_QUEUE_ENABLED !== 'false',
+    stockxTierShares: {
+      1: parseFloat(process.env.STOCKX_SHARE_TIER1 || '40'),
+      2: parseFloat(process.env.STOCKX_SHARE_TIER2 || '25'),
+      3: parseFloat(process.env.STOCKX_SHARE_TIER3 || '35'),
+    },
     stockxStaleDays: {
       1: parseFloat(process.env.STOCKX_STALE_DAYS_TIER1 || '3'),
       2: parseFloat(process.env.STOCKX_STALE_DAYS_TIER2 || '7'),

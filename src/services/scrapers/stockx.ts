@@ -1,15 +1,39 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer, { Browser, Page } from 'puppeteer';
 import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
 import { StockXListing } from '../../types/index.js';
+import { StockxLookupStatus, recordStockxLookup } from '../pricing/stockxLookups.js';
+
+export interface StockxLookupResult {
+  status: StockxLookupStatus;
+  listing: StockXListing | null;
+}
+
+interface SearchOutcome {
+  listings: StockXListing[];
+  // Set when the search itself broke (launch/navigation error, or a block or
+  // challenge page instead of results), as opposed to StockX not listing it.
+  error?: string;
+}
+
+const profileDir = () =>
+  config.scraper.stockxProfileDir || path.join(os.homedir(), '.cache', 'sneakersbook', 'stockx-profile');
 
 /**
  * StockX Price Scraper
  *
  * Uses Puppeteer headless browser to bypass Cloudflare protection
  * and scrape prices from StockX search results.
+ *
+ * Use the default export everywhere. Every caller shares one persistent
+ * Chrome profile (a returning visitor looks less like a bot), and Chrome
+ * allows one browser per profile, so all scrapes must queue on the same
+ * instance's lock. Separate instances per route used to collide with
+ * "The browser is already running for .../stockx-profile".
  */
 export class StockxScraper {
   private browser: Browser | null = null;
@@ -106,15 +130,45 @@ export class StockxScraper {
       }
     }
 
-    this.browser = await puppeteer.launch({
-      headless: true,
-      args,
-      userDataDir:
-        config.scraper.stockxProfileDir ||
-        path.join(os.homedir(), '.cache', 'sneakersbook', 'stockx-profile'),
-    });
+    const launch = () => puppeteer.launch({ headless: true, args, userDataDir: profileDir() });
+    try {
+      this.browser = await launch();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/SingletonLock|already running/i.test(message)) throw error;
+      // Scrapes are serialized, so a profile that is still locked here was
+      // left behind by a Chrome that crashed or didn't close. Clear it and
+      // retry once; the profile itself (cookies, history) is kept.
+      this.releaseStaleProfile();
+      this.browser = await launch();
+    }
 
     return this.browser;
+  }
+
+  /** Kill any orphaned Chrome on our profile and remove its lock files. */
+  private releaseStaleProfile(): void {
+    const dir = profileDir();
+    try {
+      const pids = execFileSync('pgrep', ['-f', `--user-data-dir=${dir}`], { encoding: 'utf8' })
+        .split('\n')
+        .map((p) => parseInt(p, 10))
+        .filter((p) => p > 0 && p !== process.pid);
+      for (const pid of pids) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // already gone
+        }
+      }
+      if (pids.length) logger.warn({ pids }, 'Killed orphaned StockX Chrome holding the profile');
+    } catch {
+      // pgrep exits 1 when nothing matches
+    }
+    for (const name of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+      fs.rmSync(path.join(dir, name), { force: true });
+    }
+    logger.warn({ dir }, 'Cleared stale StockX profile lock');
   }
 
   /**
@@ -134,10 +188,14 @@ export class StockxScraper {
    * @returns Array of StockX listings with price data
    */
   async searchProducts(query: string, maxResults: number = 10): Promise<StockXListing[]> {
+    return (await this.search(query, maxResults)).listings;
+  }
+
+  private search(query: string, maxResults: number): Promise<SearchOutcome> {
     return this.runExclusive(() => this._searchProducts(query, maxResults));
   }
 
-  private async _searchProducts(query: string, maxResults: number = 10): Promise<StockXListing[]> {
+  private async _searchProducts(query: string, maxResults: number = 10): Promise<SearchOutcome> {
     let page: Page | null = null;
 
     try {
@@ -270,14 +328,23 @@ export class StockxScraper {
 
       logger.info({ query, found: listings.length, maxResults }, 'StockX search completed');
       if (listings.length === 0) {
+        // A real results page is titled "<query> at StockX"; anything else
+        // (access denied, captcha, "Just a moment") is a block, not a miss.
+        if (!/stockx/i.test(pageTitle)) {
+          logger.warn({ query, pageTitle, pageUrl }, 'StockX served a block or challenge page');
+          return { listings: [], error: `challenge page: ${pageTitle}` };
+        }
         const nonUsd = await page.evaluate(
           // @ts-ignore - document exists in browser context
           () => /[£€]\s?\d/.test(document.body ? document.body.innerText : ''),
         );
-        if (nonUsd) logger.warn({ query }, 'StockX served non-USD prices; ignored');
+        if (nonUsd) {
+          logger.warn({ query }, 'StockX served non-USD prices; ignored');
+          return { listings: [], error: 'non-USD prices' };
+        }
       }
 
-      return listings.map((l) => ({
+      const mapped = listings.map((l) => ({
         name: l.name,
         urlKey: l.urlKey,
         sku: '', // SKU not easily available from search
@@ -291,12 +358,11 @@ export class StockxScraper {
         url: l.url,
         timestamp: new Date(),
       }));
+      return { listings: mapped };
     } catch (error) {
-      logger.error(
-        { query, error: error instanceof Error ? error.message : String(error) },
-        'StockX search failed',
-      );
-      return [];
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ query, error: message }, 'StockX search failed');
+      return { listings: [], error: message };
     } finally {
       if (page) {
         await page.close().catch(() => {});
@@ -312,15 +378,27 @@ export class StockxScraper {
    * @returns Price data if found
    */
   async getPriceForSku(sku: string): Promise<StockXListing | null> {
+    const { status, listing } = await this.lookup(sku);
+    // On-demand lookups (catalog review, scan fallback) aren't budget-gated,
+    // since a user is waiting, but they count against today's budget.
+    await recordStockxLookup({ source: 'on_demand', status });
+    return listing;
+  }
+
+  /** One StockX lookup with an outcome callers can act on. Not recorded. */
+  async lookup(query: string): Promise<StockxLookupResult> {
     try {
-      const listings = await this.searchProducts(sku, 5);
-      return listings.length > 0 ? listings[0] : null;
+      const { listings, error } = await this.search(query, 5);
+      if (error) return { status: 'error', listing: null };
+      return listings.length > 0
+        ? { status: 'ok', listing: listings[0] }
+        : { status: 'not_found', listing: null };
     } catch (error) {
       logger.error(
-        { sku, error: error instanceof Error ? error.message : String(error) },
+        { query, error: error instanceof Error ? error.message : String(error) },
         'Failed to get StockX price',
       );
-      return null;
+      return { status: 'error', listing: null };
     }
   }
 

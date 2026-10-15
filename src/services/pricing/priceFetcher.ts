@@ -3,8 +3,16 @@ import { query as dbQuery } from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { EbayScraper } from '../scrapers/ebay.js';
 import { GoatScraper } from '../scrapers/goat.js';
-import { StockxScraper } from '../scrapers/stockx.js';
+import stockxScraper from '../scrapers/stockx.js';
 import { PriceSource, SKU } from '../../types/index.js';
+import {
+  StockxLookupSource,
+  StockxLookupStatus,
+  recordStockxLookup,
+  stockxLookupsToday,
+} from './stockxLookups.js';
+
+type StockxResult = { success: boolean; price?: number; status?: StockxLookupStatus };
 
 // Randomized delay range between StockX requests (avoids Cloudflare blocks and
 // a fixed, easily-fingerprinted interval).
@@ -51,20 +59,11 @@ export class StockxCircuitBreaker {
 export class PriceFetcher {
   private ebayScraper = new EbayScraper();
   private goatScraper = new GoatScraper();
-  private stockxScraper = new StockxScraper();
 
-  // StockX lookups made today (UTC), scheduled and on-demand. In memory, so a
-  // restart resets it; that's fine for a soft daily cap.
-  private stockxDay = '';
-  private stockxUsed = 0;
-
-  private stockxBudgetLeft(): number {
-    const today = new Date().toISOString().slice(0, 10);
-    if (today !== this.stockxDay) {
-      this.stockxDay = today;
-      this.stockxUsed = 0;
-    }
-    return config.scraper.stockxDailyBudget - this.stockxUsed;
+  /** StockX lookups left today (UTC), counting every caller. */
+  private async stockxBudgetLeft(): Promise<number> {
+    const { total } = await stockxLookupsToday();
+    return config.scraper.stockxDailyBudget - total;
   }
 
   /** sku_id -> time of its latest stored StockX price. */
@@ -210,10 +209,9 @@ export class PriceFetcher {
    */
   async fetchStockxPricesForSku(
     sku: SKU,
-  ): Promise<{ success: boolean; price?: number }> {
+    source: StockxLookupSource = 'tier_run',
+  ): Promise<StockxResult> {
     try {
-      this.stockxBudgetLeft(); // rolls the day over
-      this.stockxUsed++;
       logger.info({ skuCode: sku.sku_code, styleCode: sku.style_code }, 'Fetching StockX prices');
 
       // Strip hyphens and spaces so "DV3054-001", "DV3054 001", "DV3054001" all resolve correctly
@@ -221,11 +219,12 @@ export class PriceFetcher {
       const query = styleCodeStripped || sku.stockx_id || this.buildSearchQuery(sku);
 
       // Search StockX
-      const listing = await this.stockxScraper.getPriceForSku(query);
+      const { status, listing } = await stockxScraper.lookup(query);
+      await recordStockxLookup({ source, status, skuId: sku.id, tier: sku.tier });
 
       if (!listing) {
-        logger.debug({ skuCode: sku.sku_code, query }, 'No listing found on StockX (scraper may be disabled)');
-        return { success: false };
+        logger.info({ skuCode: sku.sku_code, query, status }, 'No StockX price');
+        return { success: false, status };
       }
 
       logger.info(
@@ -247,6 +246,7 @@ export class PriceFetcher {
       return {
         success: true,
         price: listing.lowestAsk,
+        status,
       };
     } catch (error) {
       logger.error(
@@ -256,7 +256,7 @@ export class PriceFetcher {
         },
         'Failed to fetch StockX prices',
       );
-      return { success: false };
+      return { success: false, status: 'error' };
     }
   }
 
@@ -269,7 +269,7 @@ export class PriceFetcher {
   async fetchAllPricesForSku(sku: SKU, stockxBreaker?: StockxCircuitBreaker): Promise<{
     ebay: { success: boolean; price?: number };
     goat: { success: boolean; price?: number };
-    stockx: { success: boolean; price?: number };
+    stockx: StockxResult;
   }> {
     // Fetch eBay and GOAT in parallel (they don't have aggressive anti-bot measures)
     const [ebayResult, goatResult] = await Promise.all([
@@ -287,7 +287,8 @@ export class PriceFetcher {
 
     // Fetch StockX separately
     const stockxResult = await this.fetchStockxPricesForSku(sku);
-    stockxBreaker?.recordResult(stockxResult.success);
+    // "Not listed on StockX" is a normal miss, not a sign of a block.
+    stockxBreaker?.recordResult(stockxResult.status !== 'error');
 
     return {
       ebay: ebayResult,
@@ -343,9 +344,12 @@ export class PriceFetcher {
 
       const stockxBreaker = new StockxCircuitBreaker();
 
-      // StockX only for SKUs whose stored StockX price is stale for their
-      // tier, and only while today's budget lasts. GOAT/eBay run for all.
-      const lastStockx = skipStockX ? new Map<number, number>() : await this.lastStockxTimes(skus.map((s) => s.id));
+      // With the StockX queue on (the default) StockX is fetched by
+      // StockxQueue across the whole day, so tier runs only do GOAT/eBay.
+      // Otherwise: StockX only for SKUs whose stored StockX price is stale
+      // for their tier, and only while today's budget lasts.
+      const stockxInRun = !skipStockX && !config.scraper.stockxQueueEnabled;
+      const lastStockx = stockxInRun ? await this.lastStockxTimes(skus.map((s) => s.id)) : new Map<number, number>();
       const now = Date.now();
       const stockxStats = { attempted: 0, fresh: 0, overBudget: 0 };
 
@@ -353,18 +357,21 @@ export class PriceFetcher {
         const tierKey = (sku.tier === 1 || sku.tier === 2 || sku.tier === 3 ? sku.tier : 2) as 1 | 2 | 3;
         const staleMs = config.scraper.stockxStaleDays[tierKey] * 86400000;
         const last = lastStockx.get(sku.id);
-        let wantStockx = !skipStockX;
-        if (wantStockx && last !== undefined && now - last < staleMs) {
-          wantStockx = false;
+        // Why there is no StockX price this run, for the log line.
+        let stockxSkip: string | null = skipStockX ? 'skipped' : config.scraper.stockxQueueEnabled ? 'queued' : null;
+        if (!stockxSkip && last !== undefined && now - last < staleMs) {
+          stockxSkip = 'fresh';
           stockxStats.fresh++;
-        } else if (wantStockx && this.stockxBudgetLeft() <= 0) {
-          wantStockx = false;
+        } else if (!stockxSkip && (await this.stockxBudgetLeft()) <= 0) {
+          stockxSkip = 'over-budget';
           stockxStats.overBudget++;
+        } else if (!stockxSkip && stockxBreaker.isOpen) {
+          stockxSkip = 'breaker-open';
         }
-        if (wantStockx) stockxStats.attempted++;
+        if (!stockxSkip) stockxStats.attempted++;
 
-        const results = !wantStockx
-          ? { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } }
+        const results = stockxSkip
+          ? { ...(await this.fetchFastPricesForSku(sku)), stockx: { success: false } as StockxResult }
           : await this.fetchAllPricesForSku(sku, stockxBreaker);
 
         const successCount = [results.ebay, results.goat, results.stockx].filter((r) => r.success).length;
@@ -374,7 +381,9 @@ export class PriceFetcher {
             skuCode: sku.sku_code,
             ebay: results.ebay.success ? `$${results.ebay.price}` : 'failed',
             goat: results.goat.success ? `$${results.goat.price}` : 'failed',
-            stockx: results.stockx.success ? `$${results.stockx.price}` : 'disabled',
+            stockx: results.stockx.success
+              ? `$${results.stockx.price}`
+              : stockxSkip ?? results.stockx.status ?? 'error',
             sourcesSucceeded: successCount,
           },
           'Fetched prices for SKU',
@@ -385,7 +394,10 @@ export class PriceFetcher {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
 
-      logger.info({ count: skus.length, tier, stockx: stockxStats, stockxBudgetLeft: this.stockxBudgetLeft() }, 'Price fetch completed for all SKUs');
+      logger.info(
+        { count: skus.length, tier, stockx: stockxInRun ? stockxStats : 'queue', stockxBudgetLeft: await this.stockxBudgetLeft() },
+        'Price fetch completed for all SKUs',
+      );
       return skus.length;
     } catch (error) {
       logger.error(

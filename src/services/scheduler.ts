@@ -3,6 +3,7 @@ import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { PriceFetcher } from './pricing/priceFetcher.js';
 import ecmvPersistence from './pricing/ecmvPersistence.js';
+import stockxQueue from './pricing/stockxQueue.js';
 import { query as dbQuery } from '../db/index.js';
 import { SKU } from '../types/index.js';
 import notifier from './notifier.js';
@@ -20,6 +21,8 @@ import { notifyConvexOfReleases } from './notifications/convexReleaseNotifier.js
  * - Tier 2 (medium ⅓):   05:00 daily
  * - Tier 3 (long-tail):  07:00 Mon & Thu
  * - ECMV (recompute):    00:00, 06:00, 12:00, 18:00
+ * - StockX (queue):      all day, one lookup about every 5 min, tier shares
+ *   (tier runs do GOAT/eBay only while STOCKX_QUEUE_ENABLED is on)
  */
 export class PriceUpdateScheduler {
   private priceFetcher = new PriceFetcher();
@@ -50,6 +53,9 @@ export class PriceUpdateScheduler {
     this.startTier3Schedule();
     this.startECMVSchedule();
     this.startReleasesSchedule();
+    if (config.scraper.stockxQueueEnabled && !config.scheduler.skipStockX) {
+      stockxQueue.start();
+    }
 
     logger.info('✅ All price update schedules started');
   }
@@ -249,6 +255,7 @@ export class PriceUpdateScheduler {
    */
   stopAll(): void {
     logger.info('Stopping price update scheduler');
+    stockxQueue.stop();
 
     if (this.tier1Task) {
       this.tier1Task.stop();

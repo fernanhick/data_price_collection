@@ -211,6 +211,8 @@ export interface AppConfig {
     stockxProfileDir?: string;
     stockxDailyBudget: number;
     stockxStaleDays: Record<1 | 2 | 3, number>;
+    stockxQueueEnabled: boolean;
+    stockxTierShares: Record<1 | 2 | 3, number>;
     ebay?: {
       conditionCodes?: string[];
       minConditionThreshold?: number;

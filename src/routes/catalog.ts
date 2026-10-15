@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { verifySecret } from '../middleware/verifySecret.js';
 import { query as dbQuery } from '../db/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
-import { StockxScraper } from '../services/scrapers/stockx.js';
+import stockxScraper from '../services/scrapers/stockx.js';
 import { PriceFetcher } from '../services/pricing/priceFetcher.js';
 import imageProcessor from '../services/imageProcessor.js';
 import { cleanImageUrl } from '../utils/imageUrl.js';
@@ -12,7 +12,6 @@ import { SKU } from '../types/index.js';
 const router = Router();
 
 const goatScraper = new GoatScraper();
-const stockxScraper = new StockxScraper();
 const priceFetcher = new PriceFetcher();
 
 // ── Brand normalization ───────────────────────────────────────────────────────

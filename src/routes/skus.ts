@@ -3,7 +3,7 @@ import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
 import { SKU } from '../types/index.js';
 import { GoatScraper } from '../services/scrapers/goat.js';
-import { StockxScraper } from '../services/scrapers/stockx.js';
+import stockxScraper from '../services/scrapers/stockx.js';
 import { KicksDBScraper } from '../services/scrapers/kicksdb.js';
 import ebayScraper from '../services/scrapers/ebay.js';
 import imageProcessor from '../services/imageProcessor.js';
@@ -13,7 +13,6 @@ import { SelectCandidateSchema } from '../schemas/sku.js';
 import { cleanImageUrl } from '../utils/imageUrl.js';
 
 const goatScraper = new GoatScraper();
-const stockxScraper = new StockxScraper();
 const kicksdbScraper = new KicksDBScraper();
 
 const router = Router();
