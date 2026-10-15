@@ -115,7 +115,8 @@ export class ECMVCalculator {
   } {
     return {
       ebay: prices.filter((p) => p.source === 'ebay'),
-      goat: prices.filter((p) => p.source === 'goat'),
+      // GOAT's $2000.00 placeholder is never a real price (see priceFetcher).
+      goat: prices.filter((p) => p.source === 'goat' && Number(p.price) !== 2000),
       stockx: prices.filter((p) => p.source === 'stockx'),
     };
   }

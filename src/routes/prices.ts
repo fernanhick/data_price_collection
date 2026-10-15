@@ -247,6 +247,40 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
       [sku.id],
     );
 
+    // Carry the last known estimate forward to today. Estimates are only
+    // written when new prices arrive, so a quiet sneaker's chart used to stop
+    // at its last price (or be empty if that was before the window). Product
+    // rule: the last known value stands until a new one replaces it. One point
+    // per day, flagged carried_forward with the date it really comes from.
+    const history: any[] = [...historyResult.rows];
+    let last = history[history.length - 1];
+    if (!last) {
+      last = (
+        await dbQuery(
+          `SELECT * FROM price_history WHERE sku_id = $1 ORDER BY timestamp DESC LIMIT 1`,
+          [sku.id],
+        )
+      ).rows[0];
+    }
+    if (last) {
+      const DAY = 86400000;
+      const now = Date.now();
+      const windowStart = now - daysNum * DAY;
+      const from = new Date(last.timestamp).getTime();
+      // Next carried point: a day after the real one, or the window start.
+      let t = Math.max(from + DAY, windowStart);
+      if (history.length === 0 && from < windowStart) t = windowStart;
+      for (; t <= now; t += DAY) {
+        history.push({
+          ...last,
+          id: null,
+          timestamp: new Date(t).toISOString(),
+          carried_forward: true,
+          carried_from: last.timestamp,
+        });
+      }
+    }
+
     // Get raw prices too
     const pricesResult = await dbQuery(
       `SELECT source, price, timestamp FROM prices
@@ -267,7 +301,7 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
     }
 
     // Calculate statistics
-    const ecmvValues = historyResult.rows.map((h: any) => h.ecmv);
+    const ecmvValues = history.map((h: any) => Number(h.ecmv));
     const stats = {
       min: Math.min(...ecmvValues),
       max: Math.max(...ecmvValues),
@@ -279,9 +313,9 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
       sku_code: sku.sku_code,  // Deprecated but included
       style_code: sku.style_code,
       days: daysNum,
-      data_points: historyResult.rows.length,
+      data_points: history.length,
       stats,
-      history: historyResult.rows,
+      history,
       raw_prices: pricesResult.rows,
     });
   } catch (error) {

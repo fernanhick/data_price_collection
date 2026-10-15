@@ -15,6 +15,11 @@ import {
 
 type StockxResult = { success: boolean; price?: number; status?: StockxLookupStatus };
 
+// GOAT answers some SKUs with a literal $2000.00 lowest price: a placeholder,
+// never a real ask (a $90 Vans "worth" $2,000). The app already drops it from
+// the price range; it must never be stored or blended into an estimate.
+export const GOAT_PLACEHOLDER_PRICE = 2000;
+
 // Randomized delay range between StockX requests (avoids Cloudflare blocks and
 // a fixed, easily-fingerprinted interval).
 const STOCKX_DELAY_MIN_MS = 8000;
@@ -172,6 +177,10 @@ export class PriceFetcher {
       }
 
       const priceInDollars = listing.lowestPriceCents / 100;
+      if (priceInDollars === GOAT_PLACEHOLDER_PRICE) {
+        logger.info({ skuCode: sku.sku_code, name: listing.name }, 'GOAT placeholder price ($2000) ignored');
+        return { success: false };
+      }
 
       logger.info(
         { skuCode: sku.sku_code, price: priceInDollars, name: listing.name },
