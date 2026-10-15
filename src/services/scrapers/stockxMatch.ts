@@ -127,16 +127,65 @@ export function matchScore(target: MatchTarget, title: string): number {
   return ours.filter(found).length / ours.length;
 }
 
+// Size range. StockX lists kids' versions as separate products with the same
+// name plus a suffix, "Jordan 9 Retro OG Space Jam (2026) (GS)", at very
+// different prices (adult $207, GS $130, PS $57). Titles: only that suffix
+// counts, so a "Baby Blue" colorway is not a baby shoe. Our SKUs: the model,
+// when it says so ("Air Force 1 Highness GS"); most kids' SKUs don't.
+type KidSize = 'gs' | 'ps' | 'td' | 'kids';
+
+const TITLE_KID_SUFFIX: [KidSize, RegExp][] = [
+  ['gs', /\((gs|youth|big kids?)\)/i],
+  ['ps', /\((ps|preschool|little kids?)\)/i],
+  ['td', /\((td|toddler|infants?|i)\)/i],
+  ['kids', /\(kids?\)/i],
+];
+// No bare "kid"/"youth": "Kid Cudi x Torsion", "Beauty & Youth x Samba".
+const MODEL_KID_WORDS: [KidSize, RegExp][] = [
+  ['gs', /\b(gs|grade school|big kids?)\b/i],
+  ['ps', /\b(ps|pre-?school|little kids?)\b/i],
+  ['td', /\b(td|toddlers?|infants?|crib)\b/i],
+  ['kids', /\bkids\b/i],
+];
+const TITLE_WOMENS = /\(women'?s\)/i;
+const MODEL_WOMENS = /\b(wmns|womens|women'?s)\b/i;
+
+function kidSize(text: string, patterns: [KidSize, RegExp][]): KidSize | null {
+  return patterns.find(([, re]) => re.test(text))?.[0] ?? null;
+}
+
+/**
+ * A kids' listing only for the same kids' size; adult SKUs never take one.
+ * Our size range is in the model ("1 Mid GS") or, from how names were split,
+ * a suffix on the colorway ("Medium Olive (GS)").
+ */
+export function sizeRangeAllowed(target: MatchTarget, title: string): boolean {
+  const ours =
+    kidSize(target.model ?? '', MODEL_KID_WORDS) ?? kidSize(target.colorway ?? '', TITLE_KID_SUFFIX);
+  const theirs = kidSize(title, TITLE_KID_SUFFIX);
+  // No colorway and no size marker: we can't tell, and StockX's ranking for
+  // the exact style code (often a GS listing) beats any adult lookalike.
+  if (ours === null && !target.colorway?.trim()) return true;
+  if (ours === null) return theirs === null;
+  if (ours === 'kids' || theirs === 'kids') return theirs !== null;
+  return ours === theirs;
+}
+
 export function pickMatch<T extends MatchCandidate>(target: MatchTarget, candidates: T[]): MatchResult<T> {
   let best: T | null = null;
   let bestScore = 0;
+  // Women's is only a tie-break: many women's-only releases sit in our
+  // catalog without "Wmns", so a hard rule would block them for good.
+  const oursWomens = MODEL_WOMENS.test(target.model ?? '');
   for (const c of candidates) {
-    const score = matchScore(target, c.name);
+    let score = matchScore(target, c.name);
     if (score < 0) {
       // Nothing to match on: keep the old behaviour, first result with a price.
       const first = candidates.find((x) => x.lowestAsk && x.lowestAsk > 0) ?? null;
       return { best: first, score: -1 };
     }
+    if (!sizeRangeAllowed(target, c.name)) continue;
+    if (TITLE_WOMENS.test(c.name) !== oursWomens) score -= 0.001;
     if (score > bestScore) {
       best = c;
       bestScore = score;
