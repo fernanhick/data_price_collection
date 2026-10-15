@@ -34,7 +34,7 @@ function msUntilNextUtcDay(now = Date.now()): number {
  * StockX price queue.
  *
  * One lookup at a time, paced so the day's budget is spread over the whole
- * UTC day (about one every 5 minutes at 300/day) rather than burst at 03:00.
+ * UTC day (about one every 3-4 minutes at 400/day) rather than burst at 03:00.
  * Each tier is guaranteed its share of the budget while it has stale SKUs,
  * so tier 3 always makes progress instead of starving behind tier 1.
  * Within a tier the stalest SKU goes first (never-fetched before anything),

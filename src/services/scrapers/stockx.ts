@@ -20,6 +20,17 @@ interface SearchOutcome {
   error?: string;
 }
 
+// On-demand lookups (scan fallback, catalog review) are cached per style code.
+// The app often asks for the same code twice within seconds (retries, two
+// screens), and every repeat used to cost a real StockX hit from the budget.
+// Misses are cached shorter so a newly listed shoe shows up the same day.
+// Errors are never cached.
+const ON_DEMAND_HIT_TTL_MS = 6 * 60 * 60_000;
+const ON_DEMAND_MISS_TTL_MS = 2 * 60 * 60_000;
+const ON_DEMAND_CACHE_MAX = 1000;
+
+const cacheKey = (query: string) => query.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
 const profileDir = () =>
   config.scraper.stockxProfileDir || path.join(os.homedir(), '.cache', 'sneakersbook', 'stockx-profile');
 
@@ -44,6 +55,9 @@ export class StockxScraper {
   // scheduled tier job and an on-lookup price fetch can never spawn parallel
   // browsers — the multiplier that OOM-killed the 1GB instance.
   private scrapeChain: Promise<unknown> = Promise.resolve();
+
+  private onDemandCache = new Map<string, { listing: StockXListing | null; expires: number }>();
+  private onDemandInFlight = new Map<string, Promise<StockXListing | null>>();
 
   private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.scrapeChain.then(fn, fn);
@@ -378,11 +392,46 @@ export class StockxScraper {
    * @returns Price data if found
    */
   async getPriceForSku(sku: string): Promise<StockXListing | null> {
-    const { status, listing } = await this.lookup(sku);
-    // On-demand lookups (catalog review, scan fallback) aren't budget-gated,
-    // since a user is waiting, but they count against today's budget.
-    await recordStockxLookup({ source: 'on_demand', status });
-    return listing;
+    const key = cacheKey(sku);
+    if (!key) return null;
+
+    const cached = this.onDemandCache.get(key);
+    if (cached && cached.expires > Date.now()) {
+      logger.info({ query: sku, hit: !!cached.listing }, 'StockX on-demand cache hit');
+      return cached.listing;
+    }
+    // Same code already being looked up: share that result.
+    const inFlight = this.onDemandInFlight.get(key);
+    if (inFlight) {
+      logger.info({ query: sku }, 'StockX on-demand lookup joined in-flight request');
+      return inFlight;
+    }
+
+    const request = (async () => {
+      const { status, listing } = await this.lookup(sku);
+      // On-demand lookups aren't budget-gated, since a user is waiting, but
+      // they count against today's budget.
+      await recordStockxLookup({ source: 'on_demand', status });
+      if (status !== 'error') {
+        if (this.onDemandCache.size >= ON_DEMAND_CACHE_MAX) {
+          const now = Date.now();
+          for (const [k, v] of this.onDemandCache) if (v.expires <= now) this.onDemandCache.delete(k);
+          // Still full: drop the oldest entries (Map keeps insertion order).
+          for (const k of this.onDemandCache.keys()) {
+            if (this.onDemandCache.size < ON_DEMAND_CACHE_MAX) break;
+            this.onDemandCache.delete(k);
+          }
+        }
+        this.onDemandCache.set(key, {
+          listing,
+          expires: Date.now() + (listing ? ON_DEMAND_HIT_TTL_MS : ON_DEMAND_MISS_TTL_MS),
+        });
+      }
+      return listing;
+    })().finally(() => this.onDemandInFlight.delete(key));
+
+    this.onDemandInFlight.set(key, request);
+    return request;
   }
 
   /** One StockX lookup with an outcome callers can act on. Not recorded. */

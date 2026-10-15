@@ -21,7 +21,7 @@ import { notifyConvexOfReleases } from './notifications/convexReleaseNotifier.js
  * - Tier 2 (medium ⅓):   05:00 daily
  * - Tier 3 (long-tail):  07:00 Mon & Thu
  * - ECMV (recompute):    00:00, 06:00, 12:00, 18:00
- * - StockX (queue):      all day, one lookup about every 5 min, tier shares
+ * - StockX (queue):      all day, one lookup about every 3-4 min, tier shares
  *   (tier runs do GOAT/eBay only while STOCKX_QUEUE_ENABLED is on)
  */
 export class PriceUpdateScheduler {
