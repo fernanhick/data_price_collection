@@ -4,6 +4,7 @@ import logger from '../utils/logger.js';
 import { CreateSKUSchema, UpdateSKUSchema } from '../schemas/sku.js';
 import { SKU } from '../types/index.js';
 import { ZodError } from 'zod';
+import { STYLE_KEY_SQL, styleKey } from '../db/styleCode.js';
 
 const router = Router();
 
@@ -20,10 +21,10 @@ router.post('/skus', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ userId, style_code: validatedData.style_code }, 'Creating new SKU');
 
-    // Check if style code already exists
+    // Check if style code already exists (any spelling of it)
     const existingResult = await dbQuery<SKU>(
-      'SELECT id FROM skus WHERE style_code = $1',
-      [validatedData.style_code],
+      `SELECT id FROM skus WHERE ${STYLE_KEY_SQL} = $1`,
+      [styleKey(validatedData.style_code)],
     );
 
     if (existingResult.rows.length > 0) {

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { query as dbQuery } from '../db/index.js';
 import logger from '../utils/logger.js';
 import ecmvPersistence from '../services/pricing/ecmvPersistence.js';
+import { STYLE_KEY_SQL, styleKey } from '../db/styleCode.js';
 import { SKU, PriceResponse } from '../types/index.js';
 
 const router = Router();
@@ -36,14 +37,20 @@ batchRouter.post('/batch', async (req: Request, res: Response): Promise<void> =>
 
     logger.info({ count: style_codes.length }, 'Batch price lookup');
 
-    // Fetch all matching SKUs in one query
-    const placeholders = style_codes.map((_: string, i: number) => `$${i + 1}`).join(', ');
+    // Fetch all matching SKUs in one query, in any spelling of the code: the
+    // app may hold "DD1391 100" for a SKU stored as "DD1391-100".
     const skuResult = await dbQuery<SKU>(
-      `SELECT * FROM skus WHERE style_code IN (${placeholders})`,
-      style_codes,
+      `SELECT * FROM skus WHERE ${STYLE_KEY_SQL} = ANY($1)`,
+      [style_codes.map((c: string) => styleKey(c))],
     );
 
-    const skuMap = new Map(skuResult.rows.map((s: SKU) => [s.style_code, s]));
+    const byKey = new Map(skuResult.rows.map((s: SKU) => [styleKey(s.style_code), s]));
+    // Answer under the spelling the caller asked for.
+    const skuMap = new Map<string, SKU>();
+    for (const code of style_codes as string[]) {
+      const sku = byKey.get(styleKey(code));
+      if (sku) skuMap.set(code, sku);
+    }
 
     // Fetch latest price_history for all found SKUs in one query
     const skuIds = skuResult.rows.map((s: SKU) => s.id);
@@ -124,8 +131,10 @@ router.get('/:style_code', async (req: Request, res: Response): Promise<void> =>
 
     logger.info({ style_code, userId }, 'Fetching price');
 
-    // Get SKU from database
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE style_code = $1', [style_code]);
+    // Get SKU from database (any spelling of the code)
+    const skuResult = await dbQuery<SKU>(`SELECT * FROM skus WHERE ${STYLE_KEY_SQL} = $1`, [
+      styleKey(style_code),
+    ]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });
@@ -218,8 +227,10 @@ router.get('/:style_code/history', async (req: Request, res: Response): Promise<
 
     logger.info({ style_code, days: daysNum, userId }, 'Fetching price history');
 
-    // Get SKU
-    const skuResult = await dbQuery<SKU>('SELECT * FROM skus WHERE style_code = $1', [style_code]);
+    // Get SKU (any spelling of the code)
+    const skuResult = await dbQuery<SKU>(`SELECT * FROM skus WHERE ${STYLE_KEY_SQL} = $1`, [
+      styleKey(style_code),
+    ]);
 
     if (skuResult.rows.length === 0) {
       res.status(404).json({ error: 'SKU not found' });

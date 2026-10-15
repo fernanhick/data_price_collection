@@ -234,7 +234,7 @@ router.post('/submissions', verifySecret, async (req: Request, res: Response) =>
     const insertResult = await dbQuery<{ id: number }>(
       `INSERT INTO skus (sku_code, style_code, brand, model, colorway, tier, retail_price, image_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (style_code) DO NOTHING
+       ON CONFLICT DO NOTHING
        RETURNING id`,
       [
         canonicalStyleCode,

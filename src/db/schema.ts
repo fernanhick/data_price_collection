@@ -132,6 +132,10 @@ CREATE TABLE IF NOT EXISTS upcoming_releases (
 CREATE INDEX IF NOT EXISTS idx_upcoming_releases_release_date ON upcoming_releases(release_date);
 CREATE INDEX IF NOT EXISTS idx_upcoming_releases_brand ON upcoming_releases(brand);
 
+-- One row per sneaker whatever the code's spelling ("DD1391-100",
+-- "DD1391 100"): see src/db/styleCode.ts.
+CREATE UNIQUE INDEX IF NOT EXISTS skus_style_key_unique ON skus ((upper(translate(style_code, '- ', ''))));
+
 -- Every StockX lookup (queue, tier run or on-demand). Drives the daily budget
 -- (survives restarts) and backs off SKUs StockX doesn't list.
 CREATE TABLE IF NOT EXISTS stockx_lookups (

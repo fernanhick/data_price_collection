@@ -11,6 +11,7 @@ import priceFetcher from '../services/pricing/priceFetcher.js';
 import notifier from '../services/notifier.js';
 import { SelectCandidateSchema } from '../schemas/sku.js';
 import { cleanImageUrl } from '../utils/imageUrl.js';
+import { STYLE_KEY_SQL, styleKey } from '../db/styleCode.js';
 
 const goatScraper = new GoatScraper();
 const kicksdbScraper = new KicksDBScraper();
@@ -316,12 +317,12 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 
     logger.info({ styleCode }, 'SKU lookup requested');
 
-    // ── Step 1: Check DB for existing matches ───────────────────────────────
+    // ── Step 1: Check DB for existing matches (any spelling of the code) ────
     const existing = await dbQuery<SKU>(
       `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier,
               image_url, image_local_path
-       FROM skus WHERE style_code = $1`,
-      [styleCode],
+       FROM skus WHERE ${STYLE_KEY_SQL} = $1`,
+      [styleKey(styleCode)],
     );
     const dbResults = existing.rows.map(formatDbRow);
 
@@ -455,7 +456,7 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         const insertResult = await dbQuery<{ id: number }>(
           `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, goat_id, stockx_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (style_code) DO NOTHING
+           ON CONFLICT DO NOTHING
            RETURNING id`,
           [c.actualStyleCode, c.actualStyleCode, c.brand, model, colorway, retailPrice,
            tier, c.imageUrl || null, c.goatId, c.stockxId],
@@ -474,8 +475,9 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
             lowestPriceCents: c.lowestPriceCents,
           }).catch(() => {});
         } else {
+          // Already stored, possibly under another spelling of the code.
           const requery = await dbQuery<{ id: number }>(
-            `SELECT id FROM skus WHERE style_code = $1`, [c.actualStyleCode],
+            `SELECT id FROM skus WHERE ${STYLE_KEY_SQL} = $1`, [styleKey(c.actualStyleCode)],
           );
           if (requery.rows.length > 0) savedIds.set(c, requery.rows[0].id);
         }
@@ -614,8 +616,8 @@ lookupRouter.post('/select', async (req: Request, res: Response): Promise<void> 
     const existing = await dbQuery<SKU>(
       `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier,
               image_url, image_local_path
-       FROM skus WHERE style_code = $1`,
-      [styleCode],
+       FROM skus WHERE ${STYLE_KEY_SQL} = $1`,
+      [styleKey(styleCode)],
     );
 
     if (existing.rows.length > 0 && (existing.rows[0] as any).image_local_path) {
@@ -635,7 +637,7 @@ lookupRouter.post('/select', async (req: Request, res: Response): Promise<void> 
       const insertResult = await dbQuery<{ id: number }>(
         `INSERT INTO skus (sku_code, style_code, brand, model, colorway, retail_price, tier, image_url, goat_id, stockx_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (style_code) DO NOTHING
+         ON CONFLICT DO NOTHING
          RETURNING id`,
         [styleCode, styleCode, data.brand, model, colorway, retailPrice,
          tier, data.source_image_url || null, data.goat_id, data.stockx_id],
@@ -644,7 +646,9 @@ lookupRouter.post('/select', async (req: Request, res: Response): Promise<void> 
       if (insertResult.rows.length > 0) {
         skuId = insertResult.rows[0].id;
       } else {
-        const requery = await dbQuery<{ id: number }>(`SELECT id FROM skus WHERE style_code = $1`, [styleCode]);
+        const requery = await dbQuery<{ id: number }>(`SELECT id FROM skus WHERE ${STYLE_KEY_SQL} = $1`, [
+          styleKey(styleCode),
+        ]);
         skuId = requery.rows[0].id;
       }
     }
