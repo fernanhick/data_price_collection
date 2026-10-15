@@ -7,14 +7,26 @@ import logger from '../../utils/logger.js';
 import config from '../../config/index.js';
 import { StockXListing } from '../../types/index.js';
 import { StockxLookupStatus, recordStockxLookup } from '../pricing/stockxLookups.js';
+import { MatchTarget, pickMatch } from './stockxMatch.js';
 
 export interface StockxLookupResult {
   status: StockxLookupStatus;
   listing: StockXListing | null;
 }
 
+// One search result, priced or not (a result with no asks shows "--").
+interface SearchHit {
+  name: string;
+  urlKey: string;
+  url: string;
+  lowestAsk: number | null;
+}
+
 interface SearchOutcome {
+  // Results with a USD ask, in StockX's order.
   listings: StockXListing[];
+  // Every result read, priced or not, for picking the right product.
+  hits: SearchHit[];
   // Set when the search itself broke (launch/navigation error, or a block or
   // challenge page instead of results), as opposed to StockX not listing it.
   error?: string;
@@ -269,7 +281,7 @@ export class StockxScraper {
 
       // Extract product data
       const listings = await page.evaluate((max) => {
-        const products: { name: string; urlKey: string; url: string; lowestAsk: number }[] = [];
+        const products: { name: string; urlKey: string; url: string; lowestAsk: number | null }[] = [];
         const seenUrls = new Set<string>();
         // USD only: the market cookies pin USD, and a £/€ price must never
         // be stored as dollars.
@@ -277,8 +289,10 @@ export class StockxScraper {
           const m = text.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
           return m ? parseFloat(m[1].replace(/,/g, '')) : null;
         };
-        const add = (name: string, href: string, price: number | null) => {
-          if (products.length >= max || !name || name.length <= 5 || !price || price <= 0) return;
+        const add = (name: string, href: string, price: number | null, needPrice: boolean) => {
+          if (products.length >= max || !name || name.length <= 5) return;
+          if (price !== null && price <= 0) price = null;
+          if (needPrice && price === null) return;
           if (!href || seenUrls.has(href)) return;
           seenUrls.add(href);
           products.push({
@@ -306,7 +320,9 @@ export class StockxScraper {
           const priceText = (Array.from(tile.querySelectorAll('span')) as any[])
             .map((el) => el.textContent || '')
             .find((t: string) => /\$\d/.test(t));
-          add(name, link?.getAttribute('href') || '', usd(priceText || ''));
+          // Unpriced tiles are kept: if the real match has no ask, the answer
+          // is "no StockX price", not the next lookalike's price.
+          add(name, link?.getAttribute('href') || '', usd(priceText || ''), false);
         }
         if (tiles.length > 0) return products;
 
@@ -327,7 +343,7 @@ export class StockxScraper {
               .replace(/Sponsored.*$/i, '')
               .replace(/US [MW] \d+.*$/i, '')
               .trim();
-            add(name, href, usd(textContent));
+            add(name, href, usd(textContent), true);
           } catch (e) {
             // Skip this element
           }
@@ -342,7 +358,7 @@ export class StockxScraper {
         // (access denied, captcha, "Just a moment") is a block, not a miss.
         if (!/stockx/i.test(pageTitle)) {
           logger.warn({ query, pageTitle, pageUrl }, 'StockX served a block or challenge page');
-          return { listings: [], error: `challenge page: ${pageTitle}` };
+          return { listings: [], hits: [], error: `challenge page: ${pageTitle}` };
         }
         const nonUsd = await page.evaluate(
           // @ts-ignore - document exists in browser context
@@ -350,7 +366,7 @@ export class StockxScraper {
         );
         if (nonUsd) {
           logger.warn({ query }, 'StockX served non-USD prices; ignored');
-          return { listings: [], error: 'non-USD prices' };
+          return { listings: [], hits: [], error: 'non-USD prices' };
         }
         // StockX says it has results but none could be read: the page markup
         // changed under the parser. An error (trips the breaker + Telegram),
@@ -362,29 +378,16 @@ export class StockxScraper {
         });
         if (resultCount > 0) {
           logger.error({ query, resultCount }, 'StockX listed results the parser could not read');
-          return { listings: [], error: `unparsed results: ${resultCount}` };
+          return { listings: [], hits: [], error: `unparsed results: ${resultCount}` };
         }
       }
 
-      const mapped = listings.map((l) => ({
-        name: l.name,
-        urlKey: l.urlKey,
-        sku: '', // SKU not easily available from search
-        lowestAsk: l.lowestAsk,
-        highestBid: null,
-        lastSale: null,
-        retailPrice: null,
-        brand: '',
-        colorway: '',
-        imageUrl: '',
-        url: l.url,
-        timestamp: new Date(),
-      }));
-      return { listings: mapped };
+      const mapped = listings.filter((l) => l.lowestAsk !== null).map((l) => this.toListing(l));
+      return { listings: mapped, hits: listings };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error({ query, error: message }, 'StockX search failed');
-      return { listings: [], error: message };
+      return { listings: [], hits: [], error: message };
     } finally {
       if (page) {
         await page.close().catch(() => {});
@@ -392,6 +395,23 @@ export class StockxScraper {
       // Close Chrome after every scrape so no idle browser stays resident in RAM.
       await this.closeBrowser().catch(() => {});
     }
+  }
+
+  private toListing(l: SearchHit): StockXListing {
+    return {
+      name: l.name,
+      urlKey: l.urlKey,
+      sku: '', // SKU not easily available from search
+      lowestAsk: l.lowestAsk ?? 0,
+      highestBid: null,
+      lastSale: null,
+      retailPrice: null,
+      brand: '',
+      colorway: '',
+      imageUrl: '',
+      url: l.url,
+      timestamp: new Date(),
+    };
   }
 
   /**
@@ -442,14 +462,34 @@ export class StockxScraper {
     return request;
   }
 
-  /** One StockX lookup with an outcome callers can act on. Not recorded. */
-  async lookup(query: string): Promise<StockxLookupResult> {
+  /**
+   * One StockX lookup with an outcome callers can act on. Not recorded.
+   * With `match` (our model/colorway) it takes the result that names our
+   * sneaker instead of the first one with a price; see stockxMatch.ts.
+   */
+  async lookup(query: string, match?: MatchTarget): Promise<StockxLookupResult> {
     try {
-      const { listings, error } = await this.search(query, 5);
+      const { listings, hits, error } = await this.search(query, 20);
       if (error) return { status: 'error', listing: null };
-      return listings.length > 0
-        ? { status: 'ok', listing: listings[0] }
-        : { status: 'not_found', listing: null };
+      if (!match) {
+        return listings.length > 0
+          ? { status: 'ok', listing: listings[0] }
+          : { status: 'not_found', listing: null };
+      }
+
+      const { best, score } = pickMatch(match, hits);
+      if (!best) {
+        logger.info({ query, match, score, top: hits[0]?.name }, 'No StockX result matches our sneaker');
+        return { status: 'not_found', listing: null };
+      }
+      if (best.lowestAsk === null) {
+        logger.info({ query, name: best.name }, 'StockX match has no ask');
+        return { status: 'not_found', listing: null };
+      }
+      if (listings[0] && best.urlKey !== listings[0].urlKey) {
+        logger.info({ query, picked: best.name, skipped: listings[0].name, score }, 'StockX matched by name');
+      }
+      return { status: 'ok', listing: this.toListing(best) };
     } catch (error) {
       logger.error(
         { query, error: error instanceof Error ? error.message : String(error) },

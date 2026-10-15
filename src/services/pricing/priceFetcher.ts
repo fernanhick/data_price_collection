@@ -219,7 +219,7 @@ export class PriceFetcher {
       const query = styleCodeStripped || sku.stockx_id || this.buildSearchQuery(sku);
 
       // Search StockX
-      const { status, listing } = await stockxScraper.lookup(query);
+      const { status, listing } = await stockxScraper.lookup(query, { model: sku.model, colorway: sku.colorway });
       await recordStockxLookup({ source, status, skuId: sku.id, tier: sku.tier });
 
       if (!listing) {
