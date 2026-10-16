@@ -2,150 +2,12 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { verifySecret } from '../middleware/verifySecret.js';
 import { query as dbQuery } from '../db/index.js';
-import { GoatScraper } from '../services/scrapers/goat.js';
-import stockxScraper from '../services/scrapers/stockx.js';
-import { PriceFetcher } from '../services/pricing/priceFetcher.js';
+import priceFetcher from '../services/pricing/priceFetcher.js';
 import imageProcessor from '../services/imageProcessor.js';
-import { cleanImageUrl } from '../utils/imageUrl.js';
+import { verifySubmission } from '../services/catalog/submissionVerifier.js';
 import { SKU } from '../types/index.js';
 
 const router = Router();
-
-const goatScraper = new GoatScraper();
-const priceFetcher = new PriceFetcher();
-
-// ── Brand normalization ───────────────────────────────────────────────────────
-// Canonical brand names as returned by GOAT (the primary source of truth).
-// Add entries here whenever a new inconsistency is discovered.
-const BRAND_CANONICAL: Record<string, string> = {
-  adidas: 'adidas',
-  Adidas: 'adidas',
-  ADIDAS: 'adidas',
-  Asics: 'ASICS',
-  asics: 'ASICS',
-};
-
-function normalizeBrand(brand: string): string {
-  return BRAND_CANONICAL[brand] ?? brand;
-}
-
-// ── Marketplace abstraction ───────────────────────────────────────────────────
-// Adding a new platform: implement lookup below and add to PLATFORMS array.
-
-interface MarketplaceResult {
-  platform: string;
-  brand: string;
-  colorway: string;
-  productName: string; // full product name (e.g. "Nike Dunk Low Retro White Black Panda")
-  retailPrice: number | null; // in dollars
-  imageUrl: string | null;
-}
-
-async function lookupGoat(styleCode: string): Promise<MarketplaceResult | null> {
-  // Metadata only (brand, colorway, retail, image): no market-price requests.
-  const listing = await goatScraper.findProduct(styleCode).catch((err) => {
-    console.warn(`[CatalogReview] GOAT lookup error for ${styleCode}:`, err);
-    return null;
-  });
-  if (!listing) return null;
-  return {
-    platform: 'GOAT',
-    brand: normalizeBrand(listing.brand),
-    colorway: listing.colorway,
-    productName: listing.name,
-    retailPrice: listing.retailPriceCents ? Math.round(listing.retailPriceCents / 100) : null,
-    imageUrl: cleanImageUrl(listing.imageUrl) || null,
-  };
-}
-
-async function lookupStockX(styleCode: string): Promise<MarketplaceResult | null> {
-  const listing = await stockxScraper.getPriceForSku(styleCode).catch((err) => {
-    console.warn(`[CatalogReview] StockX lookup error for ${styleCode}:`, err);
-    return null;
-  });
-  if (!listing) return null;
-  return {
-    platform: 'StockX',
-    brand: normalizeBrand(listing.brand),
-    colorway: listing.colorway,
-    productName: listing.name,
-    retailPrice: listing.retailPrice,
-    imageUrl: cleanImageUrl(listing.imageUrl) || null,
-  };
-}
-
-// Ordered list of platforms to try — first match wins
-const PLATFORMS = [lookupGoat, lookupStockX];
-
-async function lookupMarketplaces(styleCode: string): Promise<MarketplaceResult | null> {
-  for (const lookup of PLATFORMS) {
-    const result = await lookup(styleCode);
-    if (result) return result;
-  }
-  return null;
-}
-
-// ── Validation helpers ────────────────────────────────────────────────────────
-
-const STOP_WORDS = new Set(['and', 'the', 'with', 'for', 'low', 'mid', 'high', 'og', 'retro']);
-
-function normalize(s: string): string {
-  return s.toLowerCase().trim();
-}
-
-function meaningfulWords(s: string): string[] {
-  return normalize(s)
-    .split(/[\s\/\-,]+/)
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
-}
-
-/**
- * Validate submitted details against marketplace data.
- * Returns null if valid, or a mismatch descriptor.
- */
-function validateAgainstMarketplace(
-  submitted: { brand: string; model: string; colorway: string },
-  market: MarketplaceResult,
-): { hardReject: boolean; reason: string; detail: string } | null {
-  // 1. Brand — hard reject (unambiguous)
-  if (normalize(submitted.brand) !== normalize(market.brand)) {
-    return {
-      hardReject: true,
-      reason: 'Brand mismatch',
-      detail: `Submitted "${submitted.brand}", ${market.platform} has "${market.brand}"`,
-    };
-  }
-
-  // 2. Model — submitted words must appear in marketplace product name
-  const modelWords = meaningfulWords(submitted.model);
-  const productNameLower = normalize(market.productName);
-  const modelMatched = modelWords.length > 0 && modelWords.every((w) => productNameLower.includes(w));
-
-  if (!modelMatched) {
-    return {
-      hardReject: false,
-      reason: 'Model mismatch',
-      detail: `Submitted model "${submitted.model}" not found in ${market.platform} product name "${market.productName}"`,
-    };
-  }
-
-  // 3. Colorway — at least one meaningful word must overlap
-  const submittedWords = meaningfulWords(submitted.colorway);
-  const marketWords = meaningfulWords(market.colorway);
-  const overlap = submittedWords.filter((w) => marketWords.includes(w));
-
-  if (submittedWords.length > 0 && overlap.length === 0) {
-    return {
-      hardReject: false,
-      reason: 'Colorway mismatch',
-      detail: `Submitted "${submitted.colorway}", ${market.platform} has "${market.colorway}" — no matching words`,
-    };
-  }
-
-  return null;
-}
-
-// ── Route ─────────────────────────────────────────────────────────────────────
 
 const SubmissionBodySchema = z.object({
   brand: z.string().min(1),
@@ -154,144 +16,102 @@ const SubmissionBodySchema = z.object({
   styleCode: z.string().min(1),
   imageUrl: z.string().url().optional().nullable(),
   submissionId: z.string().min(1),
+  // Re-check number (0 = first check).
+  attempt: z.number().int().min(0).optional(),
+  // The caller can file the sneaker under a corrected style code.
+  supportsCorrection: z.boolean().optional(),
+  // Decide only: nothing is written (AI review evidence, re-review runs).
+  dryRun: z.boolean().optional(),
 });
 
 /**
  * POST /api/catalog/submissions
  *
- * Validates a sneaker submission from Convex.
- * Response:
- *   { approved: true }
- *   { approved: false, reason, detail }                        — hard reject
- *   { approved: false, reason, detail, needsManualReview: true } — needs admin
+ * Automatic verification of a sneaker a user added that the catalog didn't
+ * have (see services/catalog/submissionVerifier.ts). Response:
+ *   { approved: true,  decision: 'approved',   reason, styleCode, correctedFrom?, verifiedBy, catalogEntry }
+ *   { approved: false, decision: 'rejected',   reason }                       definitive
+ *   { approved: false, decision: 'unverified', reason, needsManualReview: true, evidence }
+ * `reason` is shown to the user. `needsManualReview` keeps older Convex
+ * builds leaving unverified submissions pending.
  */
 router.post('/submissions', verifySecret, async (req: Request, res: Response) => {
-  const parseResult = SubmissionBodySchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({
-      approved: false,
-      reason: `Invalid request body: ${parseResult.error.message}`,
-    });
+  const parsed = SubmissionBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ approved: false, reason: `Invalid request body: ${parsed.error.message}` });
     return;
   }
-
-  const { brand, model, colorway, styleCode, imageUrl, submissionId } = parseResult.data;
-
-  // Canonical: uppercase, spaces→hyphens ("DV3054 001" or "dv3054-001" → "DV3054-001")
-  const canonicalStyleCode = styleCode.trim().toUpperCase().replace(/\s+/g, '-');
-  // Stripped: no spaces/hyphens — used for marketplace lookup and DB duplicate check
-  const strippedStyleCode = styleCode.replace(/[-\s]/g, '');
-
-  console.log(`[CatalogReview] Processing submission ${submissionId} — ${brand} ${model} ${canonicalStyleCode}`);
+  const { brand, model, colorway, styleCode, imageUrl, submissionId, attempt, supportsCorrection, dryRun } = parsed.data;
 
   try {
-    // 1. Duplicate check — normalize both sides so "DV3054-001" and "DV3054 001" match
-    const existingResult = await dbQuery(
-      `SELECT id FROM skus WHERE REPLACE(REPLACE(style_code, '-', ''), ' ', '') = $1 LIMIT 1`,
-      [strippedStyleCode],
+    const v = await verifySubmission({ brand, model, colorway, styleCode, attempt, supportsCorrection });
+    console.log(
+      `[CatalogReview] ${submissionId} ${styleCode}: ${v.decision}${v.correctedFrom ? ` as ${v.styleCode}` : ''} (${v.verifiedBy ?? v.reason})`,
     );
-    if (existingResult.rows.length > 0) {
-      console.log(`[CatalogReview] Duplicate: ${canonicalStyleCode} already in skus`);
+
+    if (v.decision !== 'approved') {
       res.json({
         approved: false,
-        reason: 'Style code already in catalog',
-        detail: `${canonicalStyleCode} already exists in the database`,
+        decision: v.decision,
+        reason: v.reason,
+        styleCode: v.styleCode,
+        evidence: v.evidence,
+        ...(v.decision === 'unverified' ? { needsManualReview: true } : {}),
       });
       return;
     }
 
-    // 2. Marketplace lookup (GOAT → StockX → future platforms)
-    const marketResult = await lookupMarketplaces(strippedStyleCode);
+    const entry = v.catalogEntry!;
+    res.json({
+      approved: true,
+      decision: 'approved',
+      reason: v.reason,
+      styleCode: v.styleCode,
+      ...(v.correctedFrom ? { correctedFrom: v.correctedFrom } : {}),
+      verifiedBy: v.verifiedBy,
+      catalogEntry: entry,
+      evidence: v.evidence,
+    });
+    if (dryRun || v.alreadyInCatalog) return;
 
-    if (!marketResult) {
-      console.log(`[CatalogReview] Unverified: ${canonicalStyleCode} not found on any marketplace`);
-      res.json({
-        approved: false,
-        reason: 'Not found on resale marketplaces',
-        detail: `${canonicalStyleCode} was not found on any marketplace — may be a new release or regional`,
-        needsManualReview: true,
-      });
-      return;
-    }
-
-    // 3. Validate submitted details against marketplace data
-    const mismatch = validateAgainstMarketplace({ brand, model, colorway }, marketResult);
-    if (mismatch) {
-      console.log(`[CatalogReview] Mismatch for ${canonicalStyleCode}: ${mismatch.reason} — ${mismatch.detail}`);
-      res.json({
-        approved: false,
-        reason: mismatch.reason,
-        detail: mismatch.detail,
-        ...(mismatch.hardReject ? {} : { needsManualReview: true }),
-      });
-      return;
-    }
-
-    // 4. Passed — insert using marketplace's authoritative data
-    // brand/colorway/retail_price/image_url come from the marketplace
-    // model comes from user's submission (validated to exist in marketplace product name)
-    const resolvedImageUrl = marketResult.imageUrl ?? imageUrl ?? null;
-
-    const insertResult = await dbQuery<{ id: number }>(
+    // New to the catalog: insert with the marketplace's data, then image and
+    // first prices in the background (after the response).
+    const inserted = await dbQuery<{ id: number }>(
       `INSERT INTO skus (sku_code, style_code, brand, model, colorway, tier, retail_price, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       VALUES ($1, $1, $2, $3, $4, 3, $5, $6)
        ON CONFLICT DO NOTHING
        RETURNING id`,
-      [
-        canonicalStyleCode,
-        canonicalStyleCode,
-        marketResult.brand,
-        model,
-        marketResult.colorway,
-        3,
-        marketResult.retailPrice,
-        resolvedImageUrl,
-      ],
+      [entry.style_code, entry.brand, entry.model, entry.colorway, entry.retail_price, entry.image_url ?? imageUrl ?? null],
     );
+    const id = inserted.rows[0]?.id;
+    if (!id) return;
 
-    const newSkuId = insertResult.rows[0]?.id;
-
-    console.log(`[CatalogReview] Approved: ${canonicalStyleCode} verified on ${marketResult.platform}`);
-    res.json({ approved: true });
-
-    // 5. Background: download image + fetch prices (after response is sent)
-    if (newSkuId) {
-      const newSku: SKU = {
-        id: newSkuId,
-        sku_code: canonicalStyleCode,
-        style_code: canonicalStyleCode,
-        brand: marketResult.brand,
-        model,
-        colorway: marketResult.colorway,
-        tier: 3,
-        retail_price: marketResult.retailPrice ?? undefined,
-        image_url: resolvedImageUrl ?? undefined,
-      } as SKU;
-
-      if (resolvedImageUrl) {
-        imageProcessor
-          .downloadAndOptimize(resolvedImageUrl, newSkuId.toString())
-          .then(async (imageResult) => {
-            if (imageResult) {
-              await dbQuery(
-                `UPDATE skus SET image_local_path = $1, image_file_size = $2, image_downloaded_at = NOW() WHERE id = $3`,
-                [imageResult.fullPath, imageResult.fileSize, newSkuId],
-              );
-              console.log(`[CatalogReview] Image downloaded for ${canonicalStyleCode}: ${imageResult.fullPath}`);
-            }
-          })
-          .catch((err) => console.warn(`[CatalogReview] Image download failed for ${canonicalStyleCode}:`, err));
-      }
-
-      priceFetcher
-        .fetchAllPricesForSku(newSku)
-        .then((results) => {
-          console.log(
-            `[CatalogReview] Prices fetched for ${canonicalStyleCode} — eBay: ${results.ebay.success}, GOAT: ${results.goat.success}, StockX: ${results.stockx.success}`,
-          );
+    const image = entry.image_url ?? imageUrl ?? null;
+    if (image) {
+      imageProcessor
+        .downloadAndOptimize(image, id.toString())
+        .then(async (img) => {
+          if (img) {
+            await dbQuery(
+              `UPDATE skus SET image_local_path = $1, image_file_size = $2, image_downloaded_at = NOW() WHERE id = $3`,
+              [img.fullPath, img.fileSize, id],
+            );
+          }
         })
-        .catch((err) => console.warn(`[CatalogReview] Price fetch failed for ${canonicalStyleCode}:`, err));
+        .catch((err) => console.warn(`[CatalogReview] Image download failed for ${entry.style_code}:`, err));
     }
+    priceFetcher
+      .fetchInitialPrices({
+        id,
+        sku_code: entry.style_code,
+        style_code: entry.style_code,
+        brand: entry.brand,
+        model: entry.model,
+        colorway: entry.colorway,
+        tier: 3,
+        retail_price: entry.retail_price ?? undefined,
+      } as SKU)
+      .catch((err) => console.warn(`[CatalogReview] Price fetch failed for ${entry.style_code}:`, err));
   } catch (err) {
     console.error('[CatalogReview] Unexpected error:', err);
     res.status(500).json({ error: 'Internal server error' });
