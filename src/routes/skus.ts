@@ -26,7 +26,8 @@ const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
 
 
 const calcTier = (lowestCents: number, retailCents: number | null): number => {
-  if (retailCents && lowestCents) {
+  // GOAT's $2000.00 placeholder is no ask: it made unpriced shoes tier 1.
+  if (retailCents && lowestCents && lowestCents !== 200000) {
     const premium = lowestCents / retailCents - 1;
     if (premium > 0.5) return 1;
     if (premium > 0.15) return 2;
