@@ -12,6 +12,7 @@ import notifier from '../services/notifier.js';
 import { SelectCandidateSchema } from '../schemas/sku.js';
 import { cleanImageUrl } from '../utils/imageUrl.js';
 import { STYLE_KEY_SQL, styleKey } from '../db/styleCode.js';
+import { parseName } from '../utils/sneakerName.js';
 
 const goatScraper = new GoatScraper();
 const kicksdbScraper = new KicksDBScraper();
@@ -23,13 +24,6 @@ export const lookupRouter = Router();
 
 const normalize = (s: string) => s.replace(/[-\s]/g, '').toLowerCase();
 
-const parseName = (name: string, brand: string) => {
-  const colorwayMatch = name.match(/['"]([^'"]+)['"]/);
-  const colorway = colorwayMatch ? colorwayMatch[1] : '';
-  let clean = name.replace(/['"][^'"]+['"]/, '').trim();
-  if (brand) clean = clean.replace(new RegExp(brand, 'i'), '').trim();
-  return { model: clean.trim() || name, colorway };
-};
 
 const calcTier = (lowestCents: number, retailCents: number | null): number => {
   if (retailCents && lowestCents) {
