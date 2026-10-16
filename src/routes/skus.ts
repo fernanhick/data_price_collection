@@ -11,7 +11,7 @@ import priceFetcher from '../services/pricing/priceFetcher.js';
 import notifier from '../services/notifier.js';
 import { SelectCandidateSchema } from '../schemas/sku.js';
 import { cleanImageUrl } from '../utils/imageUrl.js';
-import { STYLE_KEY_SQL, styleKey } from '../db/styleCode.js';
+import { STYLE_KEY_SQL, letterOZeroVariants, styleKey } from '../db/styleCode.js';
 import { parseName } from '../utils/sneakerName.js';
 
 const goatScraper = new GoatScraper();
@@ -353,6 +353,51 @@ lookupRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         goatId: l.sku || null,
         stockxId: null,
       });
+    }
+
+    // ── Step 3b: letter-O / zero typo ("A01696-010" for "AO1696-010") ───────
+    // Our database, then GOAT, under the swapped code; exact matches only.
+    // Free, so it runs before StockX, whose top hit for a mistyped code is a
+    // guess the app throws away.
+    if (dbResults.length === 0 && !candidates.some((c) => c.matchType === 'exact')) {
+      for (const variant of letterOZeroVariants(styleCode).slice(1)) {
+        const rows = await dbQuery<SKU>(
+          `SELECT id, sku_code, style_code, brand, model, colorway, retail_price, tier,
+                  image_url, image_local_path
+           FROM skus WHERE ${STYLE_KEY_SQL} = $1`,
+          [styleKey(variant)],
+        );
+        if (rows.rows.length > 0) {
+          dbResults.push(...rows.rows.map(formatDbRow));
+          logger.info({ styleCode, variant }, 'Lookup matched the letter-O / zero swap in our catalog');
+          break;
+        }
+        const listings = await goatScraper.searchForDiscovery(variant, 10).catch(() => []);
+        const exact = listings.filter((l) => styleKey(l.sku || '') === styleKey(variant));
+        if (exact.length === 0) continue;
+        logger.info({ styleCode, variant }, 'Lookup matched the letter-O / zero swap on GOAT');
+        for (const l of exact) {
+          // A partial result for the typed code may already name this shoe.
+          const key = normalize((l.brand || 'Unknown') + l.name);
+          const i = candidates.findIndex((c) => normalize(c.brand + c.name) === key);
+          if (i >= 0) candidates.splice(i, 1);
+          seen.delete(key);
+          addCandidate({
+            source: 'goat',
+            matchType: 'exact',
+            actualStyleCode: l.sku,
+            name: l.name,
+            brand: l.brand || 'Unknown',
+            colorway: l.colorway || '',
+            lowestPriceCents: l.lowestPriceCents,
+            retailPriceCents: l.retailPriceCents,
+            imageUrl: l.imageUrl,
+            goatId: l.sku || null,
+            stockxId: null,
+          });
+        }
+        break;
+      }
     }
 
     const exactCandidates = candidates.filter((c) => c.matchType === 'exact');

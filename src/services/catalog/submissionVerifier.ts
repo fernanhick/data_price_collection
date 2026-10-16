@@ -1,5 +1,5 @@
 import { query as dbQuery } from '../../db/index.js';
-import { STYLE_KEY_SQL, styleKey } from '../../db/styleCode.js';
+import { STYLE_KEY_SQL, letterOZeroVariants, styleKey } from '../../db/styleCode.js';
 import logger from '../../utils/logger.js';
 import { parseName } from '../../utils/sneakerName.js';
 import { GoatScraper } from '../scrapers/goat.js';
@@ -105,9 +105,7 @@ const INVALID_CODE_REASON =
 
 /** "AO4550" typed as "A04550" (and the reverse): letter O and zero in the prefix. */
 function codeVariants(code: string): string[] {
-  const k = styleKey(code);
-  const v = new Set([k, k.replace(/^([A-Z])0/, '$1O'), k.replace(/^([A-Z])O/, '$10'), k.replace(/^([A-Z]{2})0/, '$1O')]);
-  return [...v];
+  return letterOZeroVariants(styleKey(code));
 }
 
 function fromGoatName(name: string, brand: string, styleCode: string, retailCents: number | null, image: string | null): CatalogEntry {

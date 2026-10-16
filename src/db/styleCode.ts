@@ -15,3 +15,13 @@ export const STYLE_KEY_SQL = "upper(translate(style_code, '- ', ''))";
 export function styleKey(code: string): string {
   return code.toUpperCase().replace(/[-\s]/g, '');
 }
+
+/**
+ * The code itself plus its letter-O / zero swaps in the prefix: Nike codes
+ * like "AO1696-010" are often typed "A01696-010" (and the reverse). Keeps the
+ * caller's spelling (separators), uppercased; the code itself comes first.
+ */
+export function letterOZeroVariants(code: string): string[] {
+  const c = code.toUpperCase();
+  return [...new Set([c, c.replace(/^([A-Z])0/, '$1O'), c.replace(/^([A-Z])O/, '$10'), c.replace(/^([A-Z]{2})0/, '$1O')])];
+}
